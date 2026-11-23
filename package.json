@@ -1,0 +1,13 @@
+{
+  "name": "bct-calvario",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Estructura inicial de la aplicación BCT Calvario",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "dev": "node --watch scripts/serve.mjs",
+    "check": "node --check scripts/serve.mjs && node --check src/main.js"
+  }
+}
