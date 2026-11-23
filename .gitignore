@@ -4,6 +4,10 @@ build/
 coverage/
 .cache/
 tmp/
+data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
 *.log
 .env
 .env.*
