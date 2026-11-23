@@ -5,6 +5,7 @@ import { audit, calendarFile, cancelEvent, eventById, eventDetail, eventList, ma
 import { catalog, createWork, servePdf, approveScore, uploadPdf } from './music.mjs';
 import { formation, saveFormation, saveTemplate } from './formations.mjs';
 import { transaction } from './db.mjs';
+import { createAccountMail } from './account-mail.mjs';
 
 const directors = ['director'];
 const admins = ['admin'];
@@ -13,12 +14,16 @@ const now = () => new Date().toISOString();
 
 function publicAccount(member) {
   if (!member) return null;
+  if (member.status === 'pending') return {
+    id: member.id, name: member.name, status: member.status, email: member.email,
+    needsEmailVerification: Boolean(member.requires_email_verification && !member.email_verified_at),
+  };
   return member.status === 'active' ? member : { id: member.id, name: member.name, status: member.status };
 }
 
 function email(value) {
   const address = text(value, 254, 'Correo electrónico', true).toLowerCase();
-  requireThat(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address), 422, 'Introduce un correo electrónico válido.');
+  requireThat(/^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(address), 422, 'Introduce un correo electrónico válido.');
   return address;
 }
 
@@ -31,6 +36,10 @@ function password(value, min) {
 function review(db, actor, id, input) {
   const status = choice(input.status, ['active','rejected'], 'Resolución');
   return transaction(db, () => {
+    if (status === 'active') {
+      const pending = db.prepare("SELECT requires_email_verification, email_verified_at FROM members WHERE id = ? AND status = 'pending'").get(id);
+      requireThat(!pending?.requires_email_verification || pending.email_verified_at, 409, 'El solicitante aún debe confirmar su correo.');
+    }
     const result = db.prepare(`
       UPDATE members SET status = ?, reviewed_at = ?, reviewed_by = ?
       WHERE id = ? AND status = 'pending'
@@ -51,16 +60,28 @@ function dashboard(db, member) {
   return { member, events: eventList(db, member), notices, works: catalog(db, member), updatedAt: now() };
 }
 
-export function createApi(db) {
+export function createApi(db, { sendMail, accountClock } = {}) {
   const dummyHash = hashPassword(randomUUID());
-  const loginAttempts = new Map();
+  const accountMail = createAccountMail(db, sendMail, { now: accountClock });
+  const attempts = new Map();
 
-  async function handle(request, response, pathname) {
+  function rateLimit(request, operation, limit, interval) {
+    const time = Date.now();
+    const key = operation + ':' + request.socket.remoteAddress;
+    const record = attempts.get(key);
+    const stillValid = record?.expires > time;
+    const count = stillValid ? record.count : 0;
+    requireThat(count < limit, 429, 'Demasiados intentos. Inténtalo más tarde.');
+    attempts.set(key, { count: count + 1, expires: stillValid ? record.expires : time + interval });
+  }
+
+  async function handle(request, response, pathname, expectedOrigin) {
     const method = request.method;
     const member = getMember(db, request);
+    const secure = expectedOrigin.startsWith('https://');
     if (method !== 'GET') {
       const origin = request.headers.origin;
-      requireThat(!origin || origin === 'http://' + request.headers.host, 403, 'Origen no autorizado.');
+      requireThat(!origin || origin === expectedOrigin, 403, 'Origen no autorizado.');
     }
 
     if (method === 'GET' && pathname === '/api/session') {
@@ -70,21 +91,40 @@ export function createApi(db) {
     if (method === 'POST' && pathname === '/api/logout') {
       await body(request);
       endSession(db, request);
-      return json(response, 200, {}, { 'Set-Cookie': expiredCookie });
+      return json(response, 200, {}, { 'Set-Cookie': expiredCookie(secure) });
+    }
+
+    if (method === 'POST' && ['/api/account/forgot','/api/account/resend','/api/account/verify','/api/account/reset'].includes(pathname)) {
+      const input = await body(request);
+      if (pathname === '/api/account/forgot') {
+        rateLimit(request, 'technical-mail', 8, 300000);
+        const recipient = db.prepare("SELECT id, email FROM members WHERE email = ? AND status IN ('active','pending')").get(email(input.email));
+        if (recipient) accountMail.issue(recipient, 'reset', expectedOrigin);
+        return json(response, 202, {});
+      }
+      if (pathname === '/api/account/resend') {
+        rateLimit(request, 'technical-mail', 8, 300000);
+        const current = getMember(db, request);
+        requireThat(current && current.id === member?.id && current.status === 'pending', 403, 'Inicia sesión con la solicitud pendiente.');
+        requireThat(!request.headers['x-calvario-account'] || request.headers['x-calvario-account'] === current.id,
+          409, 'La cuenta activa ha cambiado.', 'account_changed');
+        if (!current.email_verified_at) accountMail.issue(current, 'verify', expectedOrigin);
+        return json(response, 202, {});
+      }
+      rateLimit(request, 'account-token', 20, 60000);
+      if (pathname === '/api/account/verify') accountMail.verify(input.token);
+      else await accountMail.reset(input.token, password(input.password, 12));
+      return json(response, 200, {});
     }
 
     if (method === 'POST' && ['/api/login','/api/request-access'].includes(pathname)) {
       const input = await body(request);
       const signup = pathname === '/api/request-access';
-      const key = request.socket.remoteAddress;
-      const expires = Date.now() + 60000;
-      const attempt = loginAttempts.get(key);
-      const attempts = attempt?.expires > Date.now() ? attempt.count : 0;
-      requireThat(attempts < 20, 429, 'Espera un minuto antes de volver a intentarlo.');
-      loginAttempts.set(key, { count: attempts + 1, expires: attempt?.expires > Date.now() ? attempt.expires : expires });
+      rateLimit(request, signup ? 'signup' : 'login', signup ? 8 : 20, 60000);
       const address = email(input.email);
       const secret = password(input.password, signup ? 12 : 1);
       let id;
+      let verifiedHash;
       if (signup) {
         const name = text(input.name, 120, 'Nombre y apellidos', true);
         const instrument = text(input.instrument, 80, 'Instrumento', true);
@@ -92,19 +132,25 @@ export function createApi(db) {
         const hash = await hashPassword(secret);
         id = randomUUID();
         const inserted = db.prepare(`
-          INSERT INTO members(id, email, password, name, instrument, voice, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(email) DO NOTHING
+          INSERT INTO members(id, email, password, name, instrument, voice, created_at, requires_email_verification)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 1) ON CONFLICT(email) DO NOTHING
         `).run(id, address, hash, name, instrument, voice, now());
         requireThat(inserted.changes, 409, 'Ya existe una cuenta con este correo. Prueba a iniciar sesión.');
+        accountMail.issue({ id, email: address }, 'verify', expectedOrigin);
       } else {
         const match = db.prepare('SELECT id, password FROM members WHERE email = ?').get(address);
         const valid = await checkPassword(secret, match?.password ?? await dummyHash);
         requireThat(valid && match, 401, 'El correo o la contraseña son incorrectos.');
         id = match.id;
+        verifiedHash = match.password;
       }
       const session = transaction(db, () => {
+        if (!signup) {
+          const current = db.prepare('SELECT password FROM members WHERE id = ?').get(id);
+          requireThat(current?.password === verifiedHash, 401, 'El correo o la contraseña son incorrectos.');
+        }
         endSession(db, request);
-        return startSession(db, id);
+        return startSession(db, id, secure);
       });
       return json(response, signup ? 201 : 200, {}, { 'Set-Cookie': session });
     }
@@ -128,7 +174,10 @@ export function createApi(db) {
 
     if (method === 'GET' && pathname === '/api/management') {
       requireThat(managers.includes(member.role), 403, 'Tu perfil no puede consultar los contactos.');
-      const members = db.prepare('SELECT id, name, email, instrument, voice, role, status, created_at FROM members ORDER BY name').all();
+      const members = db.prepare(`
+        SELECT id, name, email, instrument, voice, role, status, created_at, email_verified_at, requires_email_verification
+        FROM members ORDER BY name
+      `).all();
       return json(response, 200, { members });
     }
 
@@ -208,9 +257,9 @@ export function createApi(db) {
     throw new HttpError(404, 'Ruta no encontrada.');
   }
 
-  return async (request, response, pathname) => {
+  return async (request, response, pathname, expectedOrigin) => {
     try {
-      await handle(request, response, pathname);
+      await handle(request, response, pathname, expectedOrigin);
     } catch (error) {
       if (error instanceof HttpError) return json(response, error.status, { error: error.message, code: error.code });
       console.error(error);

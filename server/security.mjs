@@ -16,14 +16,15 @@ export async function checkPassword(secret, hash) {
 }
 
 const LIFETIME = 7 * 86400;
-const cookie = value => 'calvario_session=' + value + '; HttpOnly; SameSite=Strict; Path=/';
-export const expiredCookie = cookie('') + '; Max-Age=0';
+const cookie = (value, secure) => 'calvario_session=' + value + '; HttpOnly; SameSite=Strict; Path=/' +
+  (secure ? '; Secure' : '');
+export const expiredCookie = secure => cookie('',secure) + '; Max-Age=0';
 
-export function startSession(db, memberId) {
+export function startSession(db, memberId, secure = false) {
   const token = randomBytes(32).toString('hex');
   db.prepare('DELETE FROM sessions WHERE expires <= ?').run(Date.now());
   db.prepare('INSERT INTO sessions VALUES (?, ?, ?)').run(digest(token), memberId, Date.now() + LIFETIME * 1000);
-  return cookie(token) + '; Max-Age=' + LIFETIME;
+  return cookie(token,secure) + '; Max-Age=' + LIFETIME;
 }
 
 function tokenHash(request) {
@@ -33,7 +34,7 @@ function tokenHash(request) {
 
 export function getMember(db, request) {
   return db.prepare(`
-    SELECT m.id, email, name, instrument, voice, role, status
+    SELECT m.id, email, name, instrument, voice, role, status, email_verified_at, requires_email_verification
     FROM sessions s JOIN members m ON m.id = s.member_id WHERE s.token = ? AND s.expires > ?
   `).get(tokenHash(request), Date.now());
 }

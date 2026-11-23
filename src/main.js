@@ -1,9 +1,10 @@
-import { area, back, bindForm, button, displayTime, empty, errorRegion, esc, eventCard, field, fullDate, header, icon,
+import { back, bindForm, button, displayTime, empty, errorRegion, esc, eventCard, fullDate, header, icon,
   initials, instrument, intention, link, matchesScore, pill, presence, role, row, sectionTitle, segment } from './ui.js';
 import { cacheDashboard, clearLocalSignout, clearPrivate, getLocal, localSignoutPending, markLocalSignout, savePending, savedFiles } from './storage.js';
 import { calendar, eventPage } from './events.js';
 import { repertoire, downloads } from './repertoire.js';
 import { management, eventEditor, formationEditor, composeNotice } from './management.js';
+import { access, mailRoutes } from './access.js';
 
 const shell = document.querySelector('#shell');
 const dialog = document.querySelector('#dialog');
@@ -226,39 +227,12 @@ function confirmAction(title, message, action) {
   });
 }
 
-function loginView(route) {
-  const requesting = route === 'solicitud';
-  const pending = state.member?.status === 'pending';
-  const blocked = state.member && state.member.status !== 'active';
-  shell.innerHTML = '<main class="access"><div class="access-brand"><img src="/public/escudo.png" alt="Escudo de Calvario" width="210" height="210">' +
-    '<p>Banda de Cornetas y Tambores<br>Santísimo Cristo del Calvario</p></div><div class="access-body">' +
-    '<section class="access-panel">' +
-    (blocked ? header(pending ? 'Solicitud pendiente' : 'Acceso bloqueado', state.member.name) +
-      '<p class="muted">' + (pending ? 'Tu solicitud está pendiente de revisión por la banda.' : 'Tu cuenta no tiene una membresía activa.') + '</p>' +
-      '<div class="actions">' + (pending ? button('Comprobar estado', 'primary','id="retry"') : '') +
-      button('Cerrar sesión','secondary','id="signout"') + '</div>'
-    : (requesting ? back('Acceso', '#/inicio') : '') + header(requesting ? 'Únete a la banda' : 'Acceso a la banda',
-      requesting ? 'Tu solicitud requiere aprobación.' : '') +
-    (state.offline ? '<p class="callout">Necesitas conexión para entrar o solicitar acceso.</p>' : '') +
-    '<form class="stack" id="access-form">' + (requesting ? field('name','Nombre y apellidos','required autocomplete="name" maxlength="120"') : '') +
-    field('email','Correo electrónico','type="email" required autocomplete="email" maxlength="254"') +
-    field('password','Contraseña','type="password" required maxlength="128" autocomplete="' + (requesting ? 'new-password" minlength="12"' : 'current-password"')) +
-    (requesting ? '<div class="field-grid">' + field('instrument','Instrumento','required maxlength="80"') + field('voice','Voz','maxlength="80"') + '</div>' : '') +
-    errorRegion + button(requesting ? 'Enviar solicitud' : 'Entrar') + '</form>' +
-    (requesting ? '' : '<p class="access-footer">¿Aún no tienes cuenta? ' + link('Solicitar acceso', '#/solicitud') + '</p>')) +
-    '</section></div></main>';
-  shell.querySelector('#retry')?.addEventListener('click', bootstrap);
-  shell.querySelector('#signout')?.addEventListener('click', () => logout().catch(error => toast(error.message)));
-  const form = shell.querySelector('#access-form');
-  if (form) bindForm(form, async input => {
-    if (localSignoutPending()) {
-      await api('/logout', 'POST', {});
-      clearLocalSignout();
-    }
-    await api(requesting ? '/request-access' : '/login', 'POST', input);
-    go('#/inicio');
-    await bootstrap();
-  });
+async function signIn(requesting, input) {
+  if (localSignoutPending()) {
+    await api('/logout', 'POST', {});
+    clearLocalSignout();
+  }
+  await api(requesting ? '/request-access' : '/login', 'POST', input);
 }
 
 function home(data) {
@@ -360,8 +334,8 @@ async function render() {
   const token = ++rendering;
   const [rawRoute, id, action] = location.hash.replace(/^#\/?/,'').split('/');
   const route = rawRoute || 'inicio';
-  if (state.member?.status !== 'active' || !state.data) {
-    loginView(route);
+  if (mailRoutes.includes(route) || state.member?.status !== 'active' || !state.data) {
+    access(shell, { state, api, bootstrap, toast, logout, signIn }, route, id);
     return;
   }
   const active = route === 'gestion' ? 'perfil' : route;

@@ -46,10 +46,14 @@ export async function management(content, ctx, mode) {
   content.innerHTML = back('Gestión','#/gestion') + header(title,isRequest ? listed.length + ' pendientes de revisión' : 'Directorio interno') +
     (listed.length ? '<div class="stack">' + listed.map(member => '<article class="card member-card"><div><h2>' + esc(member.name) +
       '</h2><p class="muted">' + instrument(member) + '</p><p class="muted">' + esc(member.email) + '</p>' +
-      (isRequest ? '<p class="muted">Solicitud · ' + displayTime(member.created_at) + '</p>' :
+      (isRequest ? '<p class="muted">Solicitud · ' + displayTime(member.created_at) + '</p>' +
+        (member.requires_email_verification && !member.email_verified_at ? pill('Correo pendiente de confirmar','accent') :
+          member.email_verified_at ? pill('Correo confirmado','good') : '') :
         pill(role[member.role]) + ' ' + pill(accessStatus[member.status])) + '</div>' +
       (isRequest ? '<form data-id="' + member.id + '" class="stack"><div class="actions">' +
-        button('Rechazar','secondary','data-choice="rejected"') + button('Aprobar','primary','data-choice="active"') +
+        button('Rechazar','secondary','data-choice="rejected"') +
+        button('Aprobar','primary','data-choice="active"' +
+          (member.requires_email_verification && !member.email_verified_at ? ' disabled' : '')) +
         '</div>' + errorRegion + '</form>' : '') + '</article>').join('') + '</div>' :
     empty(isRequest ? 'No hay solicitudes pendientes.' : 'No hay componentes en el directorio.'));
   for (const form of content.querySelectorAll('form')) {

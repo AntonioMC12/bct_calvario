@@ -1,8 +1,8 @@
-const SHELL = 'calvario-shell-v2';
+const SHELL = 'calvario-shell-v3';
 const assets = ['/', '/manifest.webmanifest', '/public/escudo.png', '/public/icon-192.png', '/public/icon-512.png',
   '/public/inter.woff2', '/public/cinzel.woff2',
   '/src/main.js', '/src/ui.js', '/src/time.js', '/src/storage.js', '/src/styles.css',
-  '/src/events.js', '/src/repertoire.js', '/src/management.js'];
+  '/src/events.js', '/src/repertoire.js', '/src/management.js', '/src/access.js'];
 const assetPaths = new Set(assets);
 
 self.addEventListener('install', event => {

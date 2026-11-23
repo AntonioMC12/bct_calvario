@@ -9,7 +9,12 @@ import { localMinute, madridInstant } from '../src/time.js';
 import { sendDueReminders } from '../server/events.mjs';
 
 const db = openDatabase(':memory:');
-const server = createAppServer(db);
+const mailbox = [];
+let offset = 0;
+const server = createAppServer(db, {
+  sendMail: async message => { mailbox.push(message); },
+  accountClock: () => Date.now() + offset,
+});
 const secret = 'Prueba-efimera-a0';
 let base, admin, director, musician, newcomer;
 let event, future, previous, work;
@@ -28,6 +33,12 @@ function client() {
     const data = type.startsWith('application/json') ? await response.json() : await response.text();
     return { status: response.status, type, data };
   };
+}
+
+function takeToken(address, route) {
+  const mail = mailbox.findLast(item => item.to === address && item.text.includes('#/' + route + '/'));
+  assert.ok(mail, 'Falta el correo para ' + address);
+  return mail.text.match(/#\/(?:verificar|restablecer)\/([a-zA-Z0-9_-]{43})/)[1];
 }
 
 before(async () => {
@@ -62,11 +73,44 @@ test('alta pendiente, aprobación y bloqueo de contactos', async () => {
   assert.equal((await newcomer('/request-access','POST',input)).status,201);
   const { data: { member } } = await newcomer('/session');
   assert.equal(member.status,'pending');
+  assert.equal(member.needsEmailVerification,true);
   assert.equal((await newcomer('/dashboard')).status,403);
   assert.equal((await musician('/management')).status,403);
   assert.equal((await musician('/requests/' + member.id,'PUT',{ status:'active' })).status,403);
+  assert.equal((await admin('/requests/' + member.id,'PUT',{ status:'active' })).status,409);
+  const token = takeToken(input.email,'verificar');
+  assert.equal((await newcomer('/account/reset','POST',{ token, password:'No-es-recuperacion' })).status,422);
+  assert.equal((await newcomer('/account/verify','POST',{ token })).status,200);
+  assert.equal((await newcomer('/account/verify','POST',{ token })).status,422);
+  assert.equal((await newcomer('/session')).data.member.needsEmailVerification,false);
   assert.equal((await admin('/requests/' + member.id,'PUT',{ status:'active' })).status,200);
   assert.equal((await newcomer('/dashboard')).data.member.role,'musician');
+});
+
+test('recuperación neutral, caducidad, concurrencia y revocación de sesiones', async () => {
+  const address = 'alta@test.invalid';
+  const anonymous = client();
+  assert.equal((await anonymous('/account/forgot','POST',{ email:'desconocido@test.invalid' })).status,202);
+  assert.ok(!mailbox.some(item => item.to === 'desconocido@test.invalid'));
+  assert.equal((await anonymous('/account/forgot','POST',{ email:address })).status,202);
+  const oldToken = takeToken(address,'restablecer');
+  assert.equal(db.prepare('SELECT digest FROM account_tokens WHERE digest = ?').get(oldToken),undefined);
+  offset += 31 * 60000;
+  const replacement = 'Nuevo-acceso-prueba-01';
+  assert.equal((await anonymous('/account/reset','POST',{ token:oldToken, password:replacement })).status,422);
+  assert.equal((await anonymous('/account/forgot','POST',{ email:address })).status,202);
+  const token = takeToken(address,'restablecer');
+  assert.notEqual(token,oldToken);
+  const results = await Promise.all([
+    anonymous('/account/reset','POST',{ token, password:replacement }),
+    anonymous('/account/reset','POST',{ token, password:replacement }),
+  ]);
+  assert.deepEqual(results.map(result => result.status).sort(),[200,422]);
+  assert.equal((await newcomer('/dashboard')).status,401);
+  assert.equal((await newcomer('/login','POST',{ email:address, password:secret })).status,401);
+  assert.equal((await newcomer('/login','POST',{ email:address, password:replacement })).status,200);
+  assert.equal((await newcomer('/dashboard')).data.member.role,'musician');
+  offset = 0;
 });
 
 test('gestión de eventos con validación, zona Madrid y avisos transaccionales', async () => {

@@ -75,4 +75,4 @@ if (created) {
 } else {
   console.log('Se reutiliza la base de demostración y sus cuentas existentes.');
 }
-start(filename);
+start(filename, { demo: true });

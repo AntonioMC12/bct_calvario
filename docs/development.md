@@ -1,5 +1,13 @@
 # Seguimiento del desarrollo
 
+## 2026-11-23 · Correo técnico y acceso v0.3
+
+- RF01–RF04. El alta nueva por contraseña requiere confirmar su correo antes de la aprobación. La migración SQLite 002 conserva el acceso y las solicitudes de v0.2. El correo verificado acredita el buzón y la aprobación sigue siendo tarea de administración o dirección.
+- Los enlaces de confirmación y recuperación se canjean mediante una acción explícita. Los tokens se almacenan como huellas. La caducidad de prueba es de 24 horas para confirmar y 30 minutos para recuperar. La recuperación responde igual para direcciones existentes y desconocidas, invalida enlaces y sesiones, y conserva rol e historial.
+- Nodemailer es la primera dependencia de ejecución. Se usa para SMTP con TLS cuando se configura un proveedor. La demo usa archivos de buzón y las pruebas usan destinatarios ficticios. La aplicación admite un origen HTTPS configurado detrás de un proxy que entrega la cabecera `Host`. El servidor sigue escuchando en la interfaz local.
+- Pasaron 12 pruebas automatizadas. En Chrome se recorrió el alta, confirmación desde el buzón, aprobación, cambio de contraseña y revocación de la sesión anterior. El dominio real, las credenciales SMTP y la entrega con un proveedor quedan por validar en el piloto.
+- Siguiente entrega de acceso. Cerrar DP16 y conectar Google, conservando una sola membresía por persona. El envío push sigue pendiente y se mantiene separado del correo técnico.
+
 ## 2026-11-23 · Primer núcleo funcional
 
 Las referencias de producto son la ERF 1.1, el manual de marca 1.1 y el brief de pantallas 1.0. Los PDF se conservan en la carpeta de documentación original. Se sigue la matriz confirmada de la ERF. Los valores de trabajo sujetos a DP sirven para desarrollo y prueba con datos ficticios.
@@ -8,7 +16,7 @@ Las referencias de producto son la ERF 1.1, el manual de marca 1.1 y el brief de
 
 | Área | Implementación local | Pendiente de aceptación o desarrollo |
 | --- | --- | --- |
-| RF01–RF08, RF41 · Acceso | Solicitud, aprobación o rechazo, autenticación local, sesiones y separación de roles, contactos restringidos, retirada de acceso mediante CLI local. | Catálogo y edición de perfiles, verificación y recuperación por correo, Google y vinculación, reglas de baja desde la app. DP01, DP02, DP12 y DP16. |
+| RF01–RF08, RF41 · Acceso | Solicitud, confirmación de correo, aprobación o rechazo, autenticación local y recuperación, sesiones y separación de roles, contactos restringidos, retirada de acceso mediante CLI local. | Entrega con SMTP real, catálogo y edición de perfiles, Google y vinculación, reglas de baja desde la app. DP01, DP02, DP12 y DP16. |
 | RF09–RF15 · Eventos | Mes y lista, ficha, creación, edición, cancelación, avisos automáticos, PDF privado, mapas y copia ICS. | Validar campos, importación ICS en los calendarios del piloto y política de documentos. DP04 y DP09. RF16 permanece como propuesta. |
 | RF17–RF24 · Asistencia | Tres estados de intención y motivo privado, lista con filtros, corrección por dirección, presencia separada, historial propio y resumen para dirección. | Validar periodos de corrección, lectores del informe y formato de exportación. DP03 y DP05. |
 | RF25–RF28 · Formaciones | Edición por administración, 1–12 columnas y hasta 240 posiciones, mover o intercambiar, advertencia de retiradas, guardado con versión, copia independiente y plantillas de posiciones. | Validar visibilidad, rango y contenido de plantillas. DP02, DP06 y DP07. |

@@ -17,6 +17,8 @@ try {
   const snapshot = new DatabaseSync(temporary);
   try {
     snapshot.exec('PRAGMA journal_mode = DELETE; DELETE FROM sessions');
+    const tokens = snapshot.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'account_tokens'").get();
+    if (tokens) snapshot.exec('DELETE FROM account_tokens');
     const integrity = snapshot.prepare('PRAGMA integrity_check').all();
     if (integrity.length !== 1 || integrity[0].integrity_check !== 'ok') throw new Error('La copia tiene errores de integridad.');
     if (snapshot.prepare('PRAGMA foreign_key_check').get()) throw new Error('La copia contiene relaciones no válidas.');

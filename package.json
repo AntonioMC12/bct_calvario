@@ -1,10 +1,12 @@
 {
   "name": "bct-calvario",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Aplicación de gestión de la banda Calvario",
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "start": "node scripts/serve.mjs",
     "dev": "node --watch scripts/serve.mjs",
@@ -13,5 +15,8 @@
     "backup": "node scripts/backup.mjs",
     "check": "node scripts/check.mjs",
     "test": "node --test"
+  },
+  "dependencies": {
+    "nodemailer": "10.6.1"
   }
 }

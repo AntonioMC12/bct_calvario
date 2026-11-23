@@ -1,12 +1,13 @@
 # Calvario
 
-PWA para la Banda de Cornetas y Tambores Santísimo Cristo del Calvario. La versión 0.2 es una entrega local con cuentas por correo y contraseña, gestión de convocatorias, asistencia, avisos, formaciones y partituras privadas.
+PWA para la Banda de Cornetas y Tambores Santísimo Cristo del Calvario. La versión 0.3 añade la confirmación de correo para altas nuevas y la recuperación de contraseña al núcleo de convocatorias, asistencia, avisos, formaciones y partituras privadas.
 
 ## Probar con datos ficticios
 
-Con Node.js 24, ejecuta:
+Con Node.js 24, instala las dependencias y arranca la demo.
 
 ```sh
+npm ci
 npm run demo
 ```
 
@@ -26,7 +27,7 @@ La base se reutiliza al volver a arrancar. Si necesitas otra contraseña de prue
 npm start
 ```
 
-El servidor escucha en la interfaz local. `PORT` cambia el puerto y `CALVARIO_DB` cambia el archivo de base de datos, que por defecto es `data/calvario.sqlite`. No hay dependencias de npm ni paso de compilación.
+El servidor escucha en la interfaz local. `PORT` cambia el puerto y `CALVARIO_DB` cambia el archivo de base de datos, que por defecto es `data/calvario.sqlite`. Ejecuta `npm ci` tras clonar o actualizar las dependencias. La interfaz se sirve sin compilar.
 
 Para crear la primera cuenta de gestión en desarrollo, define `CALVARIO_PASSWORD` en un entorno privado y ejecuta uno de estos comandos:
 
@@ -35,7 +36,15 @@ npm run account -- provision admin@ejemplo.invalid admin "Administración"
 npm run account -- provision direccion@ejemplo.invalid director "Dirección"
 ```
 
-El resto de músicos puede solicitar acceso desde la propia aplicación. La retirada operativa de una membresía de músico en desarrollo se hace con `npm run account -- deactivate músico@ejemplo.invalid`. Conserva sus registros e invalida sus sesiones.
+El resto de músicos puede solicitar acceso desde la propia aplicación. Las altas nuevas confirman su correo antes de que administración o dirección las aprueben. La retirada operativa de una membresía de músico en desarrollo se hace con `npm run account -- deactivate músico@ejemplo.invalid`. Conserva sus registros e invalida sus sesiones.
+
+## Confirmar un correo o recuperar la contraseña
+
+En la demo, busca el mensaje para tu dirección en `data/demo-mailbox/` y abre el enlace en el navegador. Si arrancas con `npm start` sin SMTP, el buzón es `data/mailbox/`. Puedes cambiarlo mediante `CALVARIO_MAILBOX`. Los archivos del buzón contienen enlaces temporales de acceso y deben quedarse en el entorno local.
+
+El enlace de confirmación caduca en 24 horas. Desde **¿Has olvidado la contraseña?** puedes pedir un enlace de recuperación que caduca en 30 minutos. Al cambiar la contraseña se invalidan los enlaces y las sesiones previas de esa cuenta.
+
+Para preparar una instancia de piloto, usa `.env.example` como referencia. Configura `CALVARIO_PUBLIC_ORIGIN` con el origen HTTPS, `CALVARIO_SMTP_URL` con la conexión al proveedor y `CALVARIO_MAIL_FROM` con el remitente. El proxy debe terminar TLS y pasar la cabecera `Host` del origen público al servidor local. Arranca con `node --env-file=.env scripts/serve.mjs`. `smtp://` exige STARTTLS y `smtps://` usa TLS desde el inicio. La demo escribe siempre en archivos de prueba.
 
 ## Probar sin conexión
 
@@ -51,7 +60,7 @@ npm test
 npm run backup -- data/copias/calvario.sqlite
 ```
 
-Las pruebas arrancan un servidor con SQLite en memoria y cubren permisos, alta, validaciones, asistencia, avisos, formaciones y PDF. El comando de copia guarda datos y documentos en un archivo nuevo, comprueba su integridad y deja fuera las sesiones. Para ensayar la restauración, arranca una instancia aislada con una **copia** del archivo en `CALVARIO_DB` y otro `PORT`.
+Las pruebas cubren migraciones, permisos, alta, recuperación, validaciones, asistencia, avisos, formaciones y PDF. El comando de copia guarda datos y documentos en un archivo nuevo y comprueba su integridad. Las sesiones y los enlaces de acceso no se restauran. Para ensayar la restauración, arranca una instancia aislada con una **copia** del archivo en `CALVARIO_DB` y otro `PORT`.
 
 ## Código y seguimiento
 
@@ -61,4 +70,4 @@ Las pruebas arrancan un servidor con SQLite en memoria y cubren permisos, alta, 
 - `public/` contiene el escudo original, los iconos derivados y las fuentes Inter y Cinzel con sus licencias OFL.
 - `docs/development.md` registra cobertura, pruebas y decisiones. `AGENTS.md` orienta las siguientes sesiones.
 
-La preparación de producción, el acceso Google, el correo de recuperación y las notificaciones push siguen pendientes. El detalle del piloto está en el seguimiento.
+Quedan por probar un proveedor SMTP real y el proxy del piloto. El acceso con Google, las notificaciones push y los demás pendientes se detallan en el seguimiento.
