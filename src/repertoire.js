@@ -2,11 +2,12 @@ import { back, bindForm, button, empty, errorRegion, esc, field, header, icon, i
   options, pill, row, sectionTitle, segment } from './ui.js';
 import { downloadPdf, openSavedPdf, removePdf, savePdf } from './storage.js';
 import { pdfContent } from './management.js';
+import { canManage } from './roles.js';
 
 let scope = 'mine';
 let query = '';
 let genre = '';
-const canUploadScores = state => !state.offline && ['admin','director'].includes(state.member.role);
+const canManageScores = state => !state.offline && canManage(state.member.role);
 
 export function repertoire(content, ctx, id) {
   if (id === 'archivo') return archive(content,ctx);
@@ -15,8 +16,8 @@ export function repertoire(content, ctx, id) {
   const { state } = ctx;
   const genres = [...new Set(state.data.works.map(work => work.genre).filter(Boolean))].sort((a,b) => a.localeCompare(b,'es'));
   if (!genres.includes(genre)) genre = '';
-  const tools = canUploadScores(state) ? '<div class="actions">' + link('Cargar partituras','#/repertorio/archivo') +
-    (state.member.role === 'director' ? link('Validar partituras','#/repertorio/validacion') : '') + '</div>' : '';
+  const tools = canManageScores(state) ? '<div class="actions">' + link('Cargar partituras','#/repertorio/archivo') +
+    link('Validar partituras','#/repertorio/validacion') + '</div>' : '';
   content.innerHTML = header('Repertorio','Partituras de la banda',tools) +
     '<div class="card stack catalog-panel"><div class="field-grid">' + field('query','Buscar por título o autor','type="search" autocomplete="off"',query) +
     '<label>Género<select name="genre"><option value="">Todos los géneros</option>' +
@@ -28,7 +29,7 @@ export function repertoire(content, ctx, id) {
   const tabs = content.querySelector('.segments');
   const list = content.querySelector('#works');
   const visible = () => state.data.works.filter(work => (scope === 'all' ?
-    work.scores.some(file => file.approved || state.member.role === 'director') :
+    work.scores.some(file => file.approved || canManageScores(state)) :
     work.scores.some(file => matchesScore(file,state.member))) &&
     (!genre || genre === work.genre) && normalize(work.title + ' ' + work.authors + ' ' + work.genre).includes(normalize(query)));
 
@@ -76,21 +77,21 @@ function scoreRow(file, ctx) {
     (saved ? button('Abrir PDF guardado','secondary','data-open="' + file.id + '"') +
       button('Exportar copia guardada','secondary','data-download="' + file.id + '"') :
       (!state.offline && file.approved ? button('Guardar sin conexión','secondary','data-save="' + file.id + '"') : '')) +
-    (!file.approved && state.member.role === 'director' && !state.offline ?
+    (!file.approved && canManageScores(state) ?
       button('Validar distribución','secondary','data-approve="' + file.id + '"') : '') +
     (state.offline && !saved ? '<span class="muted">Necesitas conexión.</span>' : '') + '</div></div>';
 }
 
 function validation(content,ctx) {
   const previous = back('Repertorio','#/repertorio');
-  if (ctx.state.member.role !== 'director' || ctx.state.offline) {
-    content.innerHTML = previous + empty('Solo dirección puede validar partituras con conexión.');
+  if (!canManageScores(ctx.state)) {
+    content.innerHTML = previous + empty('Validar partituras requiere permisos de gestión y conexión.');
     return;
   }
   const works = ctx.state.data.works.map(work => ({ ...work, scores:work.scores.filter(file => !file.approved) }))
     .filter(work => work.scores.length);
   const files = works.flatMap(work => work.scores);
-  content.innerHTML = previous + header('Validar partituras','Revisión de distribución por dirección','',
+  content.innerHTML = previous + header('Validar partituras','Revisión de distribución','',
     files.length + (files.length === 1 ? ' PDF pendiente' : ' PDF pendientes')) + (files.length ? '<div class="stack">' + works.map(work =>
       '<section class="card stack">' + sectionTitle(work.title) + '<div class="row-list">' +
       work.scores.map(file => '<div class="validation-file"><p class="muted">' + esc(file.name) + '</p>' + scoreRow(file,ctx) + '</div>').join('') +
@@ -175,23 +176,21 @@ export function downloads(content,ctx) {
 function archive(content,ctx) {
   const { state } = ctx;
   const previous = back('Repertorio','#/repertorio');
-  if (!canUploadScores(state)) {
+  if (!canManageScores(state)) {
     content.innerHTML = previous + empty('Administración y dirección pueden cargar partituras con conexión.');
     return;
   }
-  const canEditWorks = state.member.role === 'admin';
   const works = Object.fromEntries(state.data.works.map(work => [work.id,work.title]));
   const workFields = '<div class="stack">' + field('title','Título','required maxlength="150"') +
     field('authors','Autoría','required maxlength="250"') + field('genre','Género','maxlength="80"') + '</div>';
-  content.innerHTML = previous + header('Carga de partituras','Archivo musical') + '<div class="event-layout"><form id="work" class="card stack">' +
-    (canEditWorks ? '<h2>Obras</h2>' : '<h2>Nueva obra</h2>') +
-    (canEditWorks && Object.keys(works).length ? '<label>Obra<select name="existing"><option value="">Nueva obra</option>' +
+  content.innerHTML = previous + header('Carga de partituras','Archivo musical') + '<div class="event-layout"><form id="work" class="card stack"><h2>Obras</h2>' +
+    (Object.keys(works).length ? '<label>Obra<select name="existing"><option value="">Nueva obra</option>' +
       options(works) + '</select></label>' : '') + workFields +
     errorRegion + button('Crear obra','primary','id="save-work"') + '</form><section class="card stack"><h2>Cargar partituras</h2>' +
     (Object.keys(works).length ? '<label class="upload-zone" id="batch-drop">' + icon('upload') +
       '<strong>Seleccionar o arrastrar archivos PDF</strong><span class="muted">Hasta 20 archivos por lote · 5 MB por PDF</span>' +
       '<input type="file" id="batch" multiple accept="application/pdf,.pdf"></label>' +
-      '<div id="file-forms" class="stack"><p class="muted">Los PDF quedan pendientes de validación de dirección.</p></div>' :
+      '<div id="file-forms" class="stack"><p class="muted">Los PDF quedan pendientes de validación.</p></div>' :
       '<p class="muted">Crea una obra antes de cargar partituras.</p>') + '</section></div>';
   const workForm = content.querySelector('#work');
   function chooseWork() {

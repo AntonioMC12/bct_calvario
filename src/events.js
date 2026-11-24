@@ -1,10 +1,11 @@
 import { area, attendanceBadge, back, bindForm, button, dateOnly, dayKey, empty, errorRegion, esc, eventCard, field, fullDate, header, icon,
   instrument, intention, link, normalize, options, otherIntention, pill, presence, row, sectionTitle, segment, timeRange } from './ui.js';
+import { canManage } from './roles.js';
 
 const today = () => dayKey(new Date());
 let selected = today();
 let mode = 'month';
-const manager = state => ['admin','director'].includes(state.member.role) && !state.offline;
+const manager = state => !state.offline && canManage(state.member.role);
 const eventHref = id => '#/calendario/' + id;
 
 function changeMonth(direction) {
@@ -97,13 +98,13 @@ export async function eventPage(content, ctx, id, action) {
     if (!detail) {
       content.insertAdjacentHTML('beforeend',empty('Necesitas conexión para consultar la lista.'));
     } else if (action === 'asistentes') {
-      attendees(content, detail.roster, state.member.role === 'director');
-    } else if (action === 'corregir' && state.member.role === 'director') {
+      attendees(content, detail.roster, manager(state));
+    } else if (action === 'corregir' && manager(state)) {
       corrections(content,ctx,event,detail.roster.filter(member => member.active && member.id !== state.member.id));
-    } else if (action === 'pasar-lista' && state.member.role === 'director' && !event.cancelled && !open) {
+    } else if (action === 'pasar-lista' && manager(state) && !event.cancelled && !open) {
       rollCall(content,ctx,event,detail.roster.filter(member => member.active));
     } else {
-      content.insertAdjacentHTML('beforeend',empty('Esta acción está reservada a dirección y depende del estado del evento.'));
+      content.insertAdjacentHTML('beforeend',empty('Esta acción requiere permisos de gestión y depende del estado del evento.'));
     }
     return;
   }
@@ -137,9 +138,9 @@ export async function eventPage(content, ctx, id, action) {
     (open ? '<a class="button primary event-action" href="' + href + '/responder">Responder asistencia' + icon('arrow') + '</a>' : '') +
     '</section>' + (detail ? '<div class="row-list event-links">' +
     row('Asistentes',responses,href + '/asistentes','users') +
-    (state.member.role === 'director' && !event.cancelled && !open ? row('Pasar lista','Registrar presencia real',href + '/pasar-lista','check') : '') +
-    (state.member.role === 'director' ? row('Corregir intención','Revisar respuestas y motivos',href + '/corregir','perfil') : '') +
-    (state.member.role === 'admin' ? row('Formación','Editar posiciones y plantillas',href + '/formacion','grid') : '') +
+    (manager(state) && !event.cancelled && !open ? row('Pasar lista','Registrar presencia real',href + '/pasar-lista','check') : '') +
+    (manager(state) ? row('Corregir intención','Revisar respuestas y motivos',href + '/corregir','perfil') +
+      row('Formación','Editar posiciones y plantillas',href + '/formacion','grid') : '') +
     '</div>' : '') + '</div>' + (detail ? '<section class="card stack event-documents"><h2>' + icon('file') + 'Información y documentos</h2>' +
     (detail.attachments.length ? '<div class="row-list">' + detail.attachments.map(file => row(file.name,'PDF','/api/files/' + file.id,'file')).join('') + '</div>' :
       '<p class="muted">Sin documentos adjuntos.</p>') +
@@ -160,7 +161,7 @@ function respond(content, ctx, event, open) {
       Object.entries(intention).map(([value,label]) => '<label class="choice"><input type="radio" name="value" value="' + value + '"' +
         (value === selected ? ' checked' : '') + '><span>' + label + '</span></label>').join('') +
       '</fieldset><div id="reason">' + area('reason','Motivo de ausencia (opcional)','maxlength="500"',pending?.reason ?? event.reason) +
-      '<p class="muted">Solo tú y el director podéis ver el motivo.</p></div>' + errorRegion +
+      '<p class="muted">Tu motivo solo es visible para ti y para Administración y Dirección.</p></div>' + errorRegion +
       button('Guardar respuesta') + '</form>');
   const form = content.querySelector('form');
   if (!form) return;
@@ -177,7 +178,7 @@ function respond(content, ctx, event, open) {
   });
 }
 
-function attendees(content, members, director) {
+function attendees(content, members, showSummary) {
   const filters = [['all','Todos'],['yes','Asistirán'],['no','No asistirán'],['unset','Sin confirmar']];
   const totals = Map.groupBy(members, member => member.intention);
   let mode = 'all';
@@ -185,7 +186,7 @@ function attendees(content, members, director) {
     segment('Filtrar asistentes',filters.map(([value,label]) => [value,label + ' · ' +
       (value === 'all' ? members.length : totals.get(value)?.length ?? 0)]),mode) +
     field('query','Buscar componente','type="search" autocomplete="off"') + '<div id="roster" class="row-list"></div>' +
-    (director ? summary(members) : '') + '</div>');
+    (showSummary ? summary(members) : '') + '</div>');
   const search = content.querySelector('input');
   const groups = content.querySelector('.segments');
   const list = content.querySelector('#roster');
@@ -260,7 +261,7 @@ function rollCall(content, ctx, event, members) {
     const person = target.closest('[data-person]');
     if (!person || !values.has(person.dataset.person)) return;
     values.set(person.dataset.person,target.value);
-    // Keep focus and visible selection until the director changes the filters.
+    // Keep focus and visible selection until the filters change.
     drawSummary();
   };
   form.querySelector('#roll-bulk').onclick = async () => {
