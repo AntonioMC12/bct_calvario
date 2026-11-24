@@ -10,9 +10,9 @@ const eventRoute = id => '#/calendario/' + id;
 export function managementTools(member) {
   const shared = row('Solicitudes','Revisar nuevas incorporaciones','#/gestion/solicitudes','users') +
     row('Directorio','Contactos y estado de acceso','#/gestion/miembros','perfil') +
-    row('Eventos','Crear, editar y cancelar convocatorias','#/calendario','calendario');
-  const tools = member.role === 'admin' ? row('Formaciones','Selecciona una convocatoria','#/gestion/formaciones','grid') +
-    row('Carga de partituras','Crear obras y subir PDF','#/repertorio/archivo','upload') :
+    row('Eventos','Crear, editar y cancelar convocatorias','#/calendario','calendario') +
+    row('Carga de partituras','Crear obras y subir PDF','#/repertorio/archivo','upload');
+  const tools = member.role === 'admin' ? row('Formaciones','Selecciona una convocatoria','#/gestion/formaciones','grid') :
     row('Corregir intenciones','Selecciona una convocatoria','#/gestion/corregir','perfil') +
     row('Pasar lista','Presencia real por convocatoria','#/gestion/presencia','check') +
     row('Informe de asistencia','Consultar y exportar por periodo','#/gestion/asistencia','chart') +

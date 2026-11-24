@@ -6,6 +6,7 @@ import { pdfContent } from './management.js';
 let scope = 'mine';
 let query = '';
 let genre = '';
+const canUploadScores = state => !state.offline && ['admin','director'].includes(state.member.role);
 
 export function repertoire(content, ctx, id) {
   if (id === 'archivo') return archive(content,ctx);
@@ -14,9 +15,9 @@ export function repertoire(content, ctx, id) {
   const { state } = ctx;
   const genres = [...new Set(state.data.works.map(work => work.genre).filter(Boolean))].sort((a,b) => a.localeCompare(b,'es'));
   if (!genres.includes(genre)) genre = '';
-  const tool = state.offline ? '' : state.member.role === 'admin' ? link('Cargar partituras','#/repertorio/archivo') :
-    state.member.role === 'director' ? link('Validar partituras','#/repertorio/validacion') : '';
-  content.innerHTML = header('Repertorio','Partituras de la banda',tool) +
+  const tools = canUploadScores(state) ? '<div class="actions">' + link('Cargar partituras','#/repertorio/archivo') +
+    (state.member.role === 'director' ? link('Validar partituras','#/repertorio/validacion') : '') + '</div>' : '';
+  content.innerHTML = header('Repertorio','Partituras de la banda',tools) +
     '<div class="card stack catalog-panel"><div class="field-grid">' + field('query','Buscar por título o autor','type="search" autocomplete="off"',query) +
     '<label>Género<select name="genre"><option value="">Todos los géneros</option>' +
     options(Object.fromEntries(genres.map(value => [value,value])),genre) + '</select></label></div>' +
@@ -174,15 +175,17 @@ export function downloads(content,ctx) {
 function archive(content,ctx) {
   const { state } = ctx;
   const previous = back('Repertorio','#/repertorio');
-  if (state.member.role !== 'admin' || state.offline) {
-    content.innerHTML = previous + empty('La carga del archivo requiere acceso de administración y conexión.');
+  if (!canUploadScores(state)) {
+    content.innerHTML = previous + empty('Administración y dirección pueden cargar partituras con conexión.');
     return;
   }
+  const canEditWorks = state.member.role === 'admin';
   const works = Object.fromEntries(state.data.works.map(work => [work.id,work.title]));
   const workFields = '<div class="stack">' + field('title','Título','required maxlength="150"') +
     field('authors','Autoría','required maxlength="250"') + field('genre','Género','maxlength="80"') + '</div>';
   content.innerHTML = previous + header('Carga de partituras','Archivo musical') + '<div class="event-layout"><form id="work" class="card stack">' +
-    '<h2>Obras</h2>' + (Object.keys(works).length ? '<label>Obra<select name="existing"><option value="">Nueva obra</option>' +
+    (canEditWorks ? '<h2>Obras</h2>' : '<h2>Nueva obra</h2>') +
+    (canEditWorks && Object.keys(works).length ? '<label>Obra<select name="existing"><option value="">Nueva obra</option>' +
       options(works) + '</select></label>' : '') + workFields +
     errorRegion + button('Crear obra','primary','id="save-work"') + '</form><section class="card stack"><h2>Cargar partituras</h2>' +
     (Object.keys(works).length ? '<label class="upload-zone" id="batch-drop">' + icon('upload') +
