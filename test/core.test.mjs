@@ -68,6 +68,55 @@ after(async () => {
   await close();
 });
 
+test('dirección consulta informes agregados sin motivos privados y acota el periodo', async () => {
+  const saved = await director('/events','POST',{ ...previous,title:'Ensayo para informe' });
+  assert.equal(saved.status,201);
+  const target = '/events/' + saved.data.id;
+  assert.equal((await director(target+'/intention/'+ids.musician,'PUT',{ value:'no',version:0 })).status,200);
+  await db.prepare('UPDATE intentions SET reason = ? WHERE event_id = ? AND member_id = ?')
+    .run('Motivo ficticio reservado',saved.data.id,ids.musician);
+  assert.equal((await director(target+'/presence','PUT',{ rows:[
+    { id:ids.musician,value:'present' }, { id:ids.admin,value:'absent' },
+  ] })).status,200);
+  const day = previous.starts.slice(0,10);
+  const filters = { from:day,to:day,type:'Ensayo' };
+  const report = '/reports/attendance';
+  assert.equal((await client()(report,'POST',filters)).status,401);
+  assert.equal((await musician(report,'POST',filters)).status,403);
+  assert.equal((await admin(report,'POST',filters)).status,403);
+  assert.equal((await director(report,'POST',{ ...filters,from:'2026-02-30' })).status,422);
+  const result = await director(report,'POST',filters);
+  assert.equal(result.status,200);
+  const rows = result.data.rows.filter(row => row.id === saved.data.id);
+  assert.equal(rows.length,1);
+  assert.deepEqual(Object.fromEntries(['recorded','yes','no','present','absent'].map(key => [key,rows[0][key]])),
+    { recorded:2,yes:0,no:1,present:1,absent:1 });
+  assert.doesNotMatch(JSON.stringify(rows),/Motivo ficticio reservado|@test\.invalid|member_id/);
+  assert.ok(!(await director(report,'POST',{ ...filters,type:'Concierto' })).data.rows.some(row => row.id === saved.data.id));
+});
+
+test('un comunicado vincula la convocatoria y solo dirección consulta acuses agregados', async () => {
+  const event = await director('/events','POST',{ ...previous,title:'Convocatoria del comunicado' });
+  assert.equal(event.status,201);
+  const content = { title:'Comunicado de prueba',message:'Recordatorio de ensayo.',eventId:event.data.id };
+  assert.equal((await admin('/notices','POST',content)).status,403);
+  assert.equal((await director('/notices','POST',{ ...content,eventId:'inexistente' })).status,404);
+  assert.equal((await musician('/notices/audience')).status,403);
+  const audience = await director('/notices/audience');
+  assert.equal(audience.status,200);
+  const sent = await director('/notices','POST',content);
+  assert.equal(sent.status,201);
+  const link = '/notices/' + sent.data.id;
+  const own = (await musician('/dashboard')).data.notices.find(item => item.id === sent.data.id);
+  assert.equal(own.event_id,event.data.id);
+  assert.equal(own.read_at,null);
+  assert.equal((await musician(link+'/receipts')).status,403);
+  assert.equal((await admin(link+'/receipts')).status,403);
+  assert.deepEqual((await director(link+'/receipts')).data,{ total:audience.data.total, confirmed:0 });
+  for (let i = 0; i < 2; i++) assert.equal((await musician(link+'/read','PUT',{})).status,200);
+  assert.deepEqual((await director(link+'/receipts')).data,{ total:audience.data.total, confirmed:1 });
+});
+
 test('alta pendiente, aprobación y bloqueo de contactos', async () => {
   const input = { email:'alta@test.invalid', password:secret, name:'Componente nuevo', instrument:'Corneta', voice:'Segunda' };
   assert.equal((await newcomer('/request-access','POST',input)).status,201);
@@ -223,6 +272,12 @@ test('formación manual con versiones y retiro explícito', async () => {
 
 test('PDF privado, duplicados, validación por dirección y baja', async () => {
   work = (await admin('/works','POST',{ title:'Obra',authors:'Autor; Otra autora',genre:'Marcha' })).data;
+  const update = { title:'Obra revisada',authors:'Autor; Otra autora',genre:'Marcha' };
+  assert.equal((await director('/works/' + work.id,'PUT',update)).status,403);
+  assert.equal((await musician('/works/' + work.id,'PUT',update)).status,403);
+  assert.equal((await admin('/works/inexistente','PUT',update)).status,404);
+  assert.equal((await admin('/works/' + work.id,'PUT',update)).status,200);
+  assert.equal((await admin('/dashboard')).data.works.find(item => item.id === work.id).title,update.title);
   const path = '/works/' + work.id + '/scores';
   const input = { name:'partitura.pdf',instrument:'Corneta',voice:'Primera',content:samplePdf().toString('base64') };
   assert.equal((await director(path,'POST',input)).status,403);

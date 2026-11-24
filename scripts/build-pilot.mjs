@@ -28,7 +28,7 @@ await Promise.all([
   mkdir(join(shared,'src'),{ recursive:true }),
 ]);
 const src = ['access.js','connection.js','events.js','google.js','main.js','management.js','push.js',
-  'repertoire.js','storage.js','styles.css','time.js','ui.js'];
+  'repertoire.js','report.js','storage.js','styles.css','time.js','ui.js'];
 const assets = ['escudo.png','icon-192.png','icon-512.png','google-g.png','inter.woff2','cinzel.woff2',
   'inter-LICENSE.txt','cinzel-LICENSE.txt'];
 const domain = ['account-mail','api','events','formations','google','http','music','push','security','store'];

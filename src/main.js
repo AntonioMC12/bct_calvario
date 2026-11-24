@@ -3,7 +3,8 @@ import { back, bindForm, button, displayTime, empty, errorRegion, esc, eventCard
 import { cacheDashboard, clearLocalSignout, clearPrivate, getLocal, localSignoutPending, markLocalSignout, savePending, savedFiles } from './storage.js';
 import { calendar, eventPage } from './events.js';
 import { repertoire, downloads } from './repertoire.js';
-import { management, eventEditor, formationEditor, composeNotice } from './management.js';
+import { attendanceReportPage } from './report.js';
+import { management, managementTools, eventEditor, formationEditor, composeNotice } from './management.js';
 import { access, mailRoutes } from './access.js';
 import { bindGoogle, googleButton } from './google.js';
 import { clearPush, pushSettings } from './push.js';
@@ -63,6 +64,7 @@ async function reset(member = null) {
   state.data = null;
   state.pending = {};
   state.saved = new Set();
+  state.noticeDraft = null;
   state.cacheReady = false;
   await clearPrivate();
   await clearPush().catch(() => {});
@@ -272,11 +274,18 @@ function bindNotices(content, id) {
   if (id) {
     const notice = data.notices.find(item => item.id === id);
     if (!notice) return void (content.innerHTML = back('Avisos','#/avisos') + empty('Aviso no encontrado.'));
-    content.innerHTML = back('Avisos','#/avisos') + header(notice.title, displayTime(notice.created_at)) +
-      '<article class="card stack"><p class="pre">' + esc(notice.message) + '</p>' +
+    content.innerHTML = back('Avisos','#/avisos') + '<article class="card stack notice-detail">' +
+      header(notice.title, displayTime(notice.created_at), '', 'Aviso') + '<p class="pre">' + esc(notice.message) + '</p>' +
       (notice.event_id ? row('Ver evento', '', '#/calendario/' + notice.event_id, 'calendario') : '') +
       (notice.read_at ? pill('Lectura confirmada · ' + displayTime(notice.read_at),'good') :
-        state.offline ? pill('Pendiente de lectura') : '<form>' + errorRegion + button('Confirmar lectura') + '</form>') + '</article>';
+        state.offline ? pill('Pendiente de lectura','waiting') : '<form class="stack">' +
+          '<p class="muted">Abrir el aviso no confirma su lectura.</p>' + errorRegion + button('Confirmar lectura') + '</form>') + '</article>' +
+      (state.member.role === 'director' && !state.offline ? '<section class="card stack notice-receipts"><h2>Confirmaciones de lectura</h2>' +
+        '<p class="muted" role="status">Consultando confirmaciones…</p></section>' : '');
+    const receipts = content.querySelector('.notice-receipts p');
+    if (receipts) api('/notices/' + id + '/receipts').then(({ total, confirmed }) => {
+      receipts.textContent = confirmed + ' de ' + total + ' destinatarios han confirmado la lectura.';
+    }).catch(error => { receipts.textContent = error.message; });
     const form = content.querySelector('form');
     if (form) bindForm(form, async () => {
       await api('/notices/' + id + '/read', 'PUT', {});
@@ -290,12 +299,13 @@ function bindNotices(content, id) {
   const unread = data.notices.filter(item => !item.read_at);
   const list = noticeFilter === 'all' ? data.notices : unread;
   content.innerHTML = header('Avisos','Información de la banda',
-    state.member.role === 'director' && !state.offline ? link('Nuevo aviso','#/gestion/aviso') : '') +
-    segment('Filtrar avisos',[['all','Todos'],['unread','Pendientes · ' + unread.length]],noticeFilter) +
-    '<div class="row-list notice-list">' + (list.length ? list.map(item => '<a class="row" href="#/avisos/' + item.id + '">' +
-    '<span class="tile">' + icon('avisos') + '</span><span class="row-copy"><strong>' + esc(item.title) + '</strong>' +
-    '<span class="muted excerpt">' + esc(item.message) + '</span><span class="muted">' + displayTime(item.created_at) +
-    '</span></span>' + pill(item.read_at ? 'Leído' : 'Pendiente', item.read_at ? '' : 'accent') + '</a>').join('') :
+    state.member.role === 'director' && !state.offline ? '<a class="button primary" href="#/gestion/aviso">' + icon('plus') + 'Nuevo aviso</a>' : '') +
+    segment('Filtrar avisos',[['unread','Pendientes · ' + unread.length,'bell'],['all','Todos','list']],noticeFilter) +
+    '<div class="stack notice-list">' + (list.length ? list.map(item => '<article class="card stack notice-card">' +
+    '<div class="event-labels"><p class="notice-date muted">' + icon('bell') + displayTime(item.created_at) + '</p>' +
+    pill(item.read_at ? 'Lectura confirmada' : 'Lectura pendiente', item.read_at ? 'good' : 'waiting') + '</div>' +
+    '<h2><a href="#/avisos/' + esc(item.id) + '">' + esc(item.title) + '</a></h2><p class="muted excerpt">' + esc(item.message) +
+    '</p><a class="button quiet event-action" href="#/avisos/' + esc(item.id) + '">Abrir aviso' + icon('right') + '</a></article>').join('') :
       empty(noticeFilter === 'all' ? 'Aún no hay avisos.' : 'Estás al día con tus avisos.')) + '</div>';
   content.querySelector('.segments').addEventListener('click', event => {
     const value = event.target.closest('button')?.dataset.value;
@@ -309,14 +319,14 @@ function bindNotices(content, id) {
 
 function profile(content, mode) {
   const member = state.member;
+  const history = state.data.events.filter(event => Date.parse(event.starts) <= Date.now() || event.cancelled).reverse();
   if (mode === 'historial') {
-    const events = state.data.events.filter(event => Date.parse(event.starts) <= Date.now() || event.cancelled).reverse();
     content.innerHTML = back('Perfil','#/perfil') + header('Mi historial','Intención y presencia por evento') +
-      (events.length ? '<div class="stack">' + events.map(event => '<article class="card history">' +
+      (history.length ? '<div class="stack">' + history.map(event => '<article class="card history">' +
       '<div><a href="#/calendario/' + event.id + '"><strong>' + esc(event.title) + '</strong></a><p class="muted">' +
       displayTime(event.starts) + (event.cancelled ? ' · Cancelado' : '') + '</p></div>' +
-      '<dl><div><dt>Intención</dt><dd>' + intention[event.intention] + '</dd></div><div><dt>Presencia</dt><dd>' +
-      presence[event.presence] + '</dd></div></dl></article>').join('') + '</div>' : empty('Aún no hay eventos pasados.'));
+      '<dl><div><dt>Intención</dt><dd>' + pill(intention[event.intention],'waiting') + '</dd></div><div><dt>Presencia</dt><dd>' +
+      pill(presence[event.presence], event.presence === 'present' ? 'good' : '') + '</dd></div></dl></article>').join('') + '</div>' : empty('Aún no hay eventos pasados.'));
     return;
   }
   if (mode === 'descargas') return downloads(content, context);
@@ -337,15 +347,21 @@ function profile(content, mode) {
     });
     return;
   }
-  content.innerHTML = header('Mi perfil') + '<section class="card profile-card"><span class="avatar large">' + initials(member.name) +
+  const verified = history.filter(event => !event.cancelled && ['present','absent'].includes(event.presence));
+  const attended = verified.filter(event => event.presence === 'present').length;
+  const activity = verified.length ? attended + ' de ' + verified.length + ' presencias comprobadas' : 'Intención y presencia por evento';
+  content.innerHTML = header('Mi perfil') + '<div class="profile-layout"><div class="stack">' +
+    '<section class="card profile-card"><span class="avatar large">' + initials(member.name) +
     '</span><div><h2>' + esc(member.name) + '</h2><p class="muted">' + instrument(member) +
-    '</p>' + (member.email ? '<p class="muted">' + esc(member.email) + '</p>' : '') + pill(role[member.role]) + '</div></section>' +
-    '<div class="row-list">' + row('Mi historial','Intención y presencia','#/perfil/historial','clock') +
-    row('Descargas', state.saved.size + ' partituras guardadas','#/perfil/descargas','file') +
+    '</p>' + (member.email ? '<p class="muted">' + esc(member.email) + '</p>' : '') + pill(role[member.role],'accent') + '</div></section>' +
+    '<section>' + sectionTitle('Mi actividad','', 'chart') + '<div class="row-list">' + row('Mi historial',activity,'#/perfil/historial','clock') +
+    row('Descargas', state.saved.size + (state.saved.size === 1 ? ' partitura guardada' : ' partituras guardadas'),'#/perfil/descargas','file') +
+    '</div></section></div><div class="stack"><section>' + sectionTitle('Ajustes y cuenta','', 'perfil') + '<div class="row-list">' +
     (state.pushEnabled ? row('Notificaciones','Avisos en este dispositivo','#/perfil/notificaciones','avisos') : '') +
     (state.google ? row('Acceso con Google',member.google_linked ? 'Cuenta vinculada' : 'Vincular cuenta','#/perfil/google','perfil') : '') +
-    (!state.offline && member.role !== 'musician' ? row('Gestión','Herramientas de tu perfil','#/gestion','gestion') : '') + '</div>' +
-    '<div class="actions">' + button('Actualizar datos','secondary','id="retry"') + button('Cerrar sesión','secondary','id="signout"') + '</div>';
+    '<div class="row actions">' + button('Actualizar datos','quiet','id="retry"') + button('Cerrar sesión','quiet','id="signout"') + '</div></div></section>' +
+    (!state.offline && member.role !== 'musician' ? '<section>' + sectionTitle('Herramientas de gestión','', 'gestion') + managementTools(member) + '</section>' : '') +
+    '</div></div>';
   content.querySelector('#retry').addEventListener('click', bootstrap);
   content.querySelector('#signout').addEventListener('click', () => logout().catch(error => toast(error.message)));
 }
@@ -411,6 +427,7 @@ async function render() {
     else if (route === 'perfil' && id === 'notificaciones') await pushSettings(content,context);
     else if (route === 'perfil') profile(content, id);
     else if (route === 'gestion' && id === 'aviso') composeNotice(content, context);
+    else if (route === 'gestion' && id === 'asistencia') attendanceReportPage(content, context);
     else if (route === 'gestion') await management(content, context, id);
     else content.innerHTML = header('Página no encontrada') + link('Volver al inicio','#/inicio');
   } catch (error) {

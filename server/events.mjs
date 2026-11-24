@@ -74,6 +74,41 @@ export async function eventDetail(db, member, id) {
   return { event: { ...event, intention: 'unset', reason: '', intention_version: 0, ...own }, roster, attachments };
 }
 
+export async function attendanceReport(db, input) {
+  const from = text(input.from, 10, 'Desde', true);
+  const to = text(input.to, 10, 'Hasta', true);
+  const start = madridInstant(from + 'T00:00');
+  const last = madridInstant(to + 'T00:00');
+  requireThat(start && last && from <= to && Date.parse(last) - Date.parse(start) < 367 * 86400000,
+    422, 'Selecciona un intervalo válido de hasta un año.');
+  const endDay = new Date(Date.parse(to + 'T00:00:00Z') + 86400000).toISOString().slice(0,10);
+  const end = madridInstant(endDay + 'T00:00');
+  requireThat(end,422,'La fecha final no es válida.');
+  const type = choice(input.type ?? '', ['',...types], 'Tipo');
+  const rows = await db.prepare(`
+    WITH selected_events AS (
+      SELECT id, title, type, starts FROM events
+      WHERE cancelled = 0 AND starts >= ? AND starts < ? AND starts <= ? AND (? = '' OR type = ?)
+    ), marks AS (
+      SELECT i.event_id, i.member_id FROM intentions i JOIN selected_events e ON e.id = i.event_id
+      UNION
+      SELECT p.event_id, p.member_id FROM presence p JOIN selected_events e ON e.id = p.event_id
+    )
+    SELECT e.id, e.title, e.type, e.starts, m.instrument, m.voice, count(m.id) AS recorded,
+      sum(CASE WHEN i.value = 'yes' THEN 1 ELSE 0 END) AS yes,
+      sum(CASE WHEN i.value = 'no' THEN 1 ELSE 0 END) AS no,
+      sum(CASE WHEN p.value = 'present' THEN 1 ELSE 0 END) AS present,
+      sum(CASE WHEN p.value = 'absent' THEN 1 ELSE 0 END) AS absent
+    FROM selected_events e LEFT JOIN marks r ON r.event_id = e.id
+    LEFT JOIN members m ON m.id = r.member_id
+    LEFT JOIN intentions i ON i.event_id = e.id AND i.member_id = m.id
+    LEFT JOIN presence p ON p.event_id = e.id AND p.member_id = m.id
+    GROUP BY e.id, e.title, e.type, e.starts, m.instrument, m.voice
+    ORDER BY e.starts DESC, e.id, m.instrument, m.voice
+  `).all(start,end,now(),type,type);
+  return { from, to, type, rows };
+}
+
 export async function saveEvent(db, actor, input, id) {
   const title = text(input.title, 120, 'Título', true);
   const type = choice(input.type, types, 'Tipo');

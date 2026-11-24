@@ -1,5 +1,13 @@
 # Seguimiento del desarrollo
 
+## 2026-11-24 · Rediseño de las pantallas restantes
+
+- RF01–RF08 y RF41. Acceso, solicitud, verificación, recuperación y estado de la cuenta usan el diseño de Calvario. Perfil reúne historial, descargas, ajustes y herramientas del rol. El directorio interno permite buscar componentes y las solicitudes conservan la verificación previa a la aprobación.
+- RF21–RF28. Dirección dispone de un selector de convocatorias, lista de presencia con filtros y totales, e informe por fechas, tipo, instrumento y voz, con CSV e impresión a PDF. Hasta validar el alcance definitivo de DP05, el informe se reserva a dirección, excluye motivos y nombres, y cuenta parejas de evento y componente con alguna anotación. La tasa se calcula sobre la presencia comprobada. Administración puede reordenar filas de formación y descartar cambios antes de guardar.
+- RF29–RF36. El repertorio agrupa por género y da acceso a las copias sin conexión. Administración puede crear y editar obras y cargar lotes de PDF. Dirección dispone de una cola de validación y un editor de comunicados con borrador durante la sesión, vista previa, convocatoria vinculada y recuento agregado de lecturas. Se mantiene como audiencia la banda activa y el seguimiento agregado se reserva a dirección mientras se valida DP10.
+- Las maquetas son referencias de interfaz. La presencia conserva los estados oficiales de RF22 y se distingue de la intención. La difusión conserva el canal interno y el push opcional de RF36. Los cambios no requieren migración y actualizan la caché de la PWA a `v7`.
+- Se verificaron los tres roles en navegador con una demo aislada: solicitud, directorio, formaciones, carga y validación de partituras, presencia, informe y exportación, publicación y lectura de avisos y descarga local. Pasaron `npm run check`, las 21 pruebas de `npm test` y las 17 de `npm run test:postgres`.
+
 ## 2026-11-24 · Rediseño de Inicio, Calendario y Detalle de evento
 
 - RF09–RF15, RF17–RF24 y RF33–RF40. Las tres vistas siguen las propuestas de Calvario PWA Gestión Banda en Stitch. Inicio destaca la próxima convocatoria y muestra avisos pendientes y partituras acordes al instrumento. Calendario conserva las vistas Mes y Lista. Detalle reúne convocatoria, asistencia, asistentes y documentos.

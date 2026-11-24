@@ -1,36 +1,58 @@
-import { back, bindForm, button, empty, errorRegion, esc, field, header, icon, link, matchesScore, normalize,
+import { back, bindForm, button, empty, errorRegion, esc, field, header, icon, instrument, link, matchesScore, normalize,
   options, pill, row, sectionTitle, segment } from './ui.js';
 import { downloadPdf, openSavedPdf, removePdf, savePdf } from './storage.js';
 import { pdfContent } from './management.js';
 
 let scope = 'mine';
 let query = '';
+let genre = '';
 
 export function repertoire(content, ctx, id) {
   if (id === 'archivo') return archive(content,ctx);
+  if (id === 'validacion') return validation(content,ctx);
   if (id) return workPage(content,ctx,id);
   const { state } = ctx;
-  content.innerHTML = header('Repertorio','La música de la banda',
-    state.member.role === 'admin' && !state.offline ? link('Gestionar archivo','#/repertorio/archivo') : '') +
-    '<div class="catalog-tools">' + field('query','Buscar por título o autor','type="search" autocomplete="off"',query) +
-    segment('Partituras',[['mine','Mis partituras'],['all','Todas']],scope) + '</div><div id="works" class="row-list"></div>';
+  const genres = [...new Set(state.data.works.map(work => work.genre).filter(Boolean))].sort((a,b) => a.localeCompare(b,'es'));
+  if (!genres.includes(genre)) genre = '';
+  const tool = state.offline ? '' : state.member.role === 'admin' ? link('Cargar partituras','#/repertorio/archivo') :
+    state.member.role === 'director' ? link('Validar partituras','#/repertorio/validacion') : '';
+  content.innerHTML = header('Repertorio','Partituras de la banda',tool) +
+    '<div class="card stack catalog-panel"><div class="field-grid">' + field('query','Buscar por título o autor','type="search" autocomplete="off"',query) +
+    '<label>Género<select name="genre"><option value="">Todos los géneros</option>' +
+    options(Object.fromEntries(genres.map(value => [value,value])),genre) + '</select></label></div>' +
+    segment('Partituras',[['mine','Mis partituras','repertorio'],['all','Todas','list']],scope) +
+    '<p id="catalog-part" class="muted"></p></div><div id="works" class="stack"></div>';
   const search = content.querySelector('input');
+  const genreControl = content.querySelector('[name="genre"]');
   const tabs = content.querySelector('.segments');
   const list = content.querySelector('#works');
   const visible = () => state.data.works.filter(work => (scope === 'all' ?
     work.scores.some(file => file.approved || state.member.role === 'director') :
     work.scores.some(file => matchesScore(file,state.member))) &&
-    normalize(work.title + ' ' + work.authors + ' ' + work.genre).includes(normalize(query)));
+    (!genre || genre === work.genre) && normalize(work.title + ' ' + work.authors + ' ' + work.genre).includes(normalize(query)));
 
   function show() {
     const works = visible();
-    list.innerHTML = works.length ? works.map(work => row(work.title,
-      [work.authors,work.genre].filter(Boolean).join(' · '),'#/repertorio/' + work.id,'file')).join('') :
-      empty(query ? 'No hay obras que coincidan con la búsqueda.' :
+    const part = instrument(state.member);
+    const scopeHint = content.querySelector('#catalog-part');
+    scopeHint.hidden = scope !== 'mine' || !part;
+    scopeHint.innerHTML = part ? 'Tu instrumento y voz · ' + part : '';
+    list.innerHTML = works.length ? [...Map.groupBy(works,work => work.genre || 'Sin género')].map(([group,items]) =>
+      '<section class="stack catalog-group">' + sectionTitle(group) + '<div class="catalog-grid">' + items.map(work => {
+        const preferred = work.scores.find(file => matchesScore(file,state.member));
+        const file = preferred ?? (scope === 'all' ? work.scores[0] : undefined);
+        return '<article class="card stack catalog-work"><div class="member-heading"><span class="tile">' + icon('repertorio') +
+          '</span><div><h3>' + esc(work.title) + '</h3><p class="muted">' + esc(work.authors) + '</p></div></div>' +
+          (file ? scoreRow(file,ctx) : '') + '<a class="button quiet event-action" href="#/repertorio/' + esc(work.id) +
+          '">Ver obra y voces' + icon('right') + '</a></article>';
+      }).join('') + '</div></section>').join('') :
+      empty(query || genre ? 'No hay obras que coincidan con la búsqueda.' :
         scope === 'mine' ? 'Aún no hay partituras para tu instrumento y voz.' : 'El catálogo aún no tiene partituras disponibles.');
+    bindScores(list,ctx,works.flatMap(work => work.scores),show);
   }
 
   search.oninput = () => { query = search.value; show(); };
+  genreControl.onchange = () => { genre = genreControl.value; show(); };
   tabs.onclick = event => {
     const selected = event.target.closest('button');
     if (!selected) return;
@@ -47,8 +69,8 @@ function scoreRow(file, ctx) {
   const status = !file.approved ? 'Pendiente de validación' : saved ? 'Guardada en este dispositivo' : 'Disponible en línea';
   const size = new Intl.NumberFormat('es-ES',{ maximumFractionDigits:1 }).format(file.bytes / 1024);
   return '<div class="score-row"><span class="tile">' + icon('file') + '</span><div class="row-copy"><strong>' +
-    [file.instrument,file.voice].filter(Boolean).map(esc).join(' · ') + '</strong><span class="muted">PDF · ' + size + ' KB · ' + status +
-    '</span></div><div class="score-actions">' +
+    [file.instrument,file.voice].filter(Boolean).map(esc).join(' · ') + '</strong><span class="muted">PDF · ' + size + ' KB</span><div>' +
+    pill(status, !file.approved ? 'waiting' : saved ? 'good' : '') + '</div></div><div class="score-actions">' +
     (!state.offline ? '<a class="text-link" href="/api/files/' + file.id + '" target="_blank" rel="noopener">Abrir PDF</a>' : '') +
     (saved ? button('Abrir PDF guardado','secondary','data-open="' + file.id + '"') +
       button('Exportar copia guardada','secondary','data-download="' + file.id + '"') :
@@ -56,6 +78,23 @@ function scoreRow(file, ctx) {
     (!file.approved && state.member.role === 'director' && !state.offline ?
       button('Validar distribución','secondary','data-approve="' + file.id + '"') : '') +
     (state.offline && !saved ? '<span class="muted">Necesitas conexión.</span>' : '') + '</div></div>';
+}
+
+function validation(content,ctx) {
+  const previous = back('Repertorio','#/repertorio');
+  if (ctx.state.member.role !== 'director' || ctx.state.offline) {
+    content.innerHTML = previous + empty('Solo dirección puede validar partituras con conexión.');
+    return;
+  }
+  const works = ctx.state.data.works.map(work => ({ ...work, scores:work.scores.filter(file => !file.approved) }))
+    .filter(work => work.scores.length);
+  const files = works.flatMap(work => work.scores);
+  content.innerHTML = previous + header('Validar partituras','Revisión de distribución por dirección','',
+    files.length + (files.length === 1 ? ' PDF pendiente' : ' PDF pendientes')) + (files.length ? '<div class="stack">' + works.map(work =>
+      '<section class="card stack">' + sectionTitle(work.title) + '<div class="row-list">' +
+      work.scores.map(file => '<div class="validation-file"><p class="muted">' + esc(file.name) + '</p>' + scoreRow(file,ctx) + '</div>').join('') +
+      '</div></section>').join('') + '</div>' : empty('No hay partituras pendientes de validación.'));
+  bindScores(content,ctx,files,() => validation(content,ctx));
 }
 
 function workPage(content,ctx,id) {
@@ -140,31 +179,55 @@ function archive(content,ctx) {
     return;
   }
   const works = Object.fromEntries(state.data.works.map(work => [work.id,work.title]));
-  content.innerHTML = previous + header('Archivo musical') + '<div class="event-layout"><form id="work" class="card stack">' +
-    '<h2>Nueva obra</h2>' + field('title','Título','required maxlength="150"') +
-    field('authors','Autoría','required maxlength="250"') + field('genre','Género','maxlength="80"') +
-    errorRegion + button('Crear obra') + '</form><section class="card stack"><h2>Cargar partituras</h2>' +
-    (Object.keys(works).length ? '<label>Seleccionar archivos PDF<input type="file" id="batch" multiple accept="application/pdf,.pdf"></label>' +
+  const workFields = '<div class="stack">' + field('title','Título','required maxlength="150"') +
+    field('authors','Autoría','required maxlength="250"') + field('genre','Género','maxlength="80"') + '</div>';
+  content.innerHTML = previous + header('Carga de partituras','Archivo musical') + '<div class="event-layout"><form id="work" class="card stack">' +
+    '<h2>Obras</h2>' + (Object.keys(works).length ? '<label>Obra<select name="existing"><option value="">Nueva obra</option>' +
+      options(works) + '</select></label>' : '') + workFields +
+    errorRegion + button('Crear obra','primary','id="save-work"') + '</form><section class="card stack"><h2>Cargar partituras</h2>' +
+    (Object.keys(works).length ? '<label class="upload-zone" id="batch-drop">' + icon('upload') +
+      '<strong>Seleccionar o arrastrar archivos PDF</strong><span class="muted">Hasta 20 archivos por lote · 5 MB por PDF</span>' +
+      '<input type="file" id="batch" multiple accept="application/pdf,.pdf"></label>' +
       '<div id="file-forms" class="stack"><p class="muted">Los PDF quedan pendientes de validación de dirección.</p></div>' :
       '<p class="muted">Crea una obra antes de cargar partituras.</p>') + '</section></div>';
-  bindForm(content.querySelector('#work'),async input => {
-    await ctx.api('/works','POST',input);
+  const workForm = content.querySelector('#work');
+  function chooseWork() {
+    const chosen = state.data.works.find(work => work.id === workForm.elements.existing?.value);
+    for (const key of ['title','authors','genre']) workForm.elements[key].value = chosen?.[key] ?? '';
+    workForm.querySelector('#save-work').textContent = chosen ? 'Guardar datos de la obra' : 'Crear obra';
+  }
+  if (workForm.elements.existing) workForm.elements.existing.onchange = chooseWork;
+  bindForm(workForm,async ({existing,title,authors,genre}) => {
+    if (content.querySelector('#batch')?.disabled) throw new Error('Espera a que termine la carga de PDF.');
+    const batchRoot = content.querySelector('#file-forms');
+    if (batchRoot?.querySelector('form:not([data-saved])') && !await ctx.confirmAction('¿Guardar la obra?',
+      'Para actualizar el catálogo se cerrará el lote de PDF que todavía no has guardado.','Guardar obra')) return;
+    await ctx.api('/works' + (existing ? '/' + existing : ''), existing ? 'PUT' : 'POST', { title,authors,genre });
     await ctx.refresh();
-    ctx.toast('Obra creada');
+    ctx.toast(existing ? 'Datos de la obra actualizados' : 'Obra creada');
     archive(content,ctx);
   });
   const batch = content.querySelector('#batch');
   if (!batch) return;
   const forms = content.querySelector('#file-forms');
-  batch.onchange = () => {
-    const files = [...batch.files];
+  const drop = content.querySelector('#batch-drop');
+  drop.ondragover = event => { event.preventDefault(); if (!batch.disabled) drop.classList.add('dragging'); };
+  drop.ondragleave = event => { if (!drop.contains(event.relatedTarget)) drop.classList.remove('dragging'); };
+  drop.ondrop = event => {
+    event.preventDefault();
+    drop.classList.remove('dragging');
+    if (!batch.disabled && event.dataTransfer.files.length) { batch.value = ''; draw([...event.dataTransfer.files]); }
+  };
+  batch.onchange = () => draw([...batch.files]);
+  function draw(files) {
     if (files.length > 20) {
       batch.value = '';
       forms.innerHTML = '<p role="alert">Selecciona hasta 20 PDF por lote.</p>';
       return;
     }
-    forms.innerHTML = files.map((file,i) => '<form data-index="' + i + '" class="batch-form stack"><h3>' + esc(file.name) +
-      '</h3><label>Obra<select name="work" required><option value="">Elige una obra</option>' + options(works) +
+    forms.innerHTML = (files.length ? '<p class="muted">' + files.length + ' PDF en el lote</p>' : '') +
+      files.map((file,i) => '<form data-index="' + i + '" class="batch-form stack"><div class="member-heading"><span class="tile">' +
+      icon('file') + '</span><h3>' + esc(file.name) + '</h3></div><label>Obra<select name="work" required><option value="">Elige una obra</option>' + options(works) +
       '</select></label><div class="field-grid">' + field('instrument','Instrumento','required maxlength="80"') +
       field('voice','Voz','maxlength="80"') + '</div>' + errorRegion +
       button('Guardar para validación','secondary') + '</form>').join('') +
@@ -228,5 +291,5 @@ function archive(content,ctx) {
         for (const control of forms.querySelectorAll('form button')) control.disabled = false;
       }
     };
-  };
+  }
 }

@@ -18,11 +18,16 @@ export async function catalog(db, member) {
     .filter(work => work.scores.length || member.role === 'admin');
 }
 
-export async function createWork(db, input) {
-  const id = randomUUID();
-  await db.prepare('INSERT INTO works VALUES (?, ?, ?, ?)').run(id,
-    text(input.title, 150, 'Título', true), text(input.authors, 250, 'Autoría', true), text(input.genre, 80, 'Género'));
-  return { id };
+export async function saveWork(db, input, id = null) {
+  const fields = [text(input.title,150,'Título',true), text(input.authors,250,'Autoría',true), text(input.genre,80,'Género')];
+  if (id) {
+    const result = await db.prepare('UPDATE works SET title = ?, authors = ?, genre = ? WHERE id = ?').run(...fields,id);
+    requireThat(result.changes,404,'Obra no encontrada.');
+    return { id };
+  }
+  const created = randomUUID();
+  await db.prepare('INSERT INTO works VALUES (?, ?, ?, ?)').run(created,...fields);
+  return { id:created };
 }
 
 export async function uploadPdf(db, actor, input, { workId = null, eventId = null }) {

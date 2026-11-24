@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { body, choice, HttpError, json, requireThat, text } from './http.mjs';
 import { checkPassword, endSession, expiredCookie, getMember, hashPassword, sessionCookie, startSession, tokenHash } from './security.mjs';
-import { audit, calendarFile, cancelEvent, eventById, eventDetail, eventList, managers, notify, saveEvent, saveIntention, savePresence, sendDueReminders } from './events.mjs';
-import { catalog, createWork, servePdf, approveScore, uploadPdf } from './music.mjs';
+import { attendanceReport, audit, calendarFile, cancelEvent, eventById, eventDetail, eventList, managers, notify, saveEvent, saveIntention, savePresence, sendDueReminders } from './events.mjs';
+import { catalog, saveWork, servePdf, approveScore, uploadPdf } from './music.mjs';
 import { formation, saveFormation, saveTemplate } from './formations.mjs';
 import { transaction } from './store.mjs';
 import { createAccountMail } from './account-mail.mjs';
@@ -194,6 +194,9 @@ export function createApi(db, { sendMail, accountClock, google, push, publicSite
     }
 
     if (method === 'GET' && pathname === '/api/dashboard') return json(response, 200, await dashboard(db, member));
+    if (method === 'POST' && pathname === '/api/reports/attendance') {
+      return json(response, 200, await attendanceReport(db, await inputFor(directors)));
+    }
 
     if (pathname === '/api/push') {
       requireThat(push,404,'Los avisos push todavía no están configurados.');
@@ -265,12 +268,31 @@ export function createApi(db, { sendMail, accountClock, google, push, publicSite
       if (action === 'template' && method === 'POST') return json(response, 201, await saveTemplate(db, id, await inputFor(admins)));
     }
 
+    if (method === 'GET' && pathname === '/api/notices/audience') {
+      requireThat(directors.includes(member.role),403,'Solo dirección puede consultar los destinatarios.');
+      const result = await db.prepare("SELECT count(*) AS total FROM members WHERE status = 'active'").get();
+      return json(response,200,result);
+    }
     if (method === 'POST' && pathname === '/api/notices') {
       const input = await inputFor(directors);
       const title = text(input.title, 120, 'Asunto', true);
       const message = text(input.message, 4000, 'Mensaje', true);
-      const id = await notify(db, title, message, null, member.id);
+      const event = text(input.eventId,64,'Convocatoria');
+      const id = await transaction(db,async () => {
+        if (event) await eventById(db,event);
+        return await notify(db,title,message,event || null,member.id);
+      });
       return json(response, 201, { id });
+    }
+    route = pathname.match(/^\/api\/notices\/([\w-]+)\/receipts$/);
+    if (route && method === 'GET') {
+      requireThat(directors.includes(member.role),403,'Solo dirección puede consultar las lecturas.');
+      const counts = await db.prepare(`
+        SELECT count(i.member_id) AS total, count(i.read_at) AS confirmed
+        FROM notices n LEFT JOIN inbox i ON i.notice_id = n.id WHERE n.id = ? GROUP BY n.id
+      `).get(route[1]);
+      requireThat(counts,404,'Aviso no encontrado.');
+      return json(response,200,counts);
     }
     route = pathname.match(/^\/api\/notices\/([\w-]+)\/read$/);
     if (route && method === 'PUT') {
@@ -280,7 +302,9 @@ export function createApi(db, { sendMail, accountClock, google, push, publicSite
       requireThat(result.changes, 404, 'Aviso no encontrado.');
       return json(response, 200, {});
     }
-    if (method === 'POST' && pathname === '/api/works') return json(response, 201, await createWork(db, await inputFor(admins)));
+    if (method === 'POST' && pathname === '/api/works') return json(response, 201, await saveWork(db, await inputFor(admins)));
+    route = pathname.match(/^\/api\/works\/([\w-]+)$/);
+    if (route && method === 'PUT') return json(response,200,await saveWork(db,await inputFor(admins),route[1]));
     route = pathname.match(/^\/api\/works\/([\w-]+)\/scores$/);
     if (route && method === 'POST') {
       return json(response, 201, await uploadPdf(db, member, await inputFor(admins, pdfLimit), { workId: route[1] }));

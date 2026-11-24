@@ -1,4 +1,4 @@
-import { back, bindForm, button, errorRegion, esc, field, header, link } from './ui.js';
+import { back, bindForm, button, errorRegion, esc, field, header, icon, link, pill } from './ui.js';
 import { bindGoogle, googleButton, googleRegistration } from './google.js';
 
 export const mailRoutes = ['recuperar','restablecer','verificar'];
@@ -6,18 +6,21 @@ const emailField = () => field('email','Correo electrónico','type="email" requi
 const newPassword = 'type="password" required minlength="12" maxlength="128" autocomplete="new-password"';
 
 function accessFrame(body) {
-  return '<main class="access"><div class="access-brand"><img src="./public/escudo.png" alt="Escudo de Calvario" width="210" height="210">' +
-    '<p>Banda de Cornetas y Tambores<br>Santísimo Cristo del Calvario</p></div><div class="access-body">' +
+  return '<main class="access"><div class="access-brand"><img src="./public/escudo.png" alt="" width="210" height="210">' +
+    '<div><span class="brand">Calvario</span><p>Banda de Cornetas y Tambores<br>Santísimo Cristo del Calvario</p></div></div><div class="access-body">' +
     '<section class="access-panel">' + body + '</section></div></main>';
 }
 
 function accountStatus(member) {
   const pending = member.status === 'pending';
   const verify = member.needsEmailVerification;
-  const title = verify ? 'Confirma tu correo' : pending ? 'Solicitud pendiente' : 'Acceso bloqueado';
+  const rejected = member.status === 'rejected';
+  const title = verify ? 'Confirma tu correo' : pending ? 'Solicitud pendiente' : rejected ? 'Solicitud no admitida' : 'Acceso bloqueado';
   const status = verify ? 'Abre el enlace enviado a ' + member.email + ' para que la banda pueda revisar tu solicitud.' :
-    pending ? 'Tu solicitud está pendiente de revisión por la banda.' : 'Tu cuenta no tiene una membresía activa.';
-  return header(title, member.name) + '<p class="muted">' + esc(status) + '</p>' +
+    pending ? 'Tu solicitud está pendiente de revisión por la banda.' : rejected ? 'La banda no ha aprobado esta solicitud.' :
+      'Tu cuenta no tiene una membresía activa.';
+  return '<div class="account-stage">' + pill(verify ? 'Verificación' : pending ? 'En revisión' : 'Estado de la cuenta',pending ? 'waiting' : 'accent') +
+    '</div>' + header(title, member.name) + '<p class="muted">' + esc(status) + '</p>' +
     (verify ? '<form class="stack" id="resend-link">' + errorRegion + button('Reenviar enlace','secondary') + '</form>' : '') +
     '<div class="actions">' + (pending ? button('Comprobar estado','primary','id="retry"') : '') +
     button('Cerrar sesión','secondary','id="signout"') + '</div>';
@@ -25,17 +28,20 @@ function accountStatus(member) {
 
 function accessForm(requesting, offline, mailEnabled) {
   const password = requesting ? newPassword : 'type="password" required maxlength="128" autocomplete="current-password"';
-  return (requesting ? back('Acceso','#/inicio') : '') +
+  const tab = (title, href, glyph, active) => '<a href="' + href + '"' + (active ? ' aria-current="page"' : '') + '>' + icon(glyph) + title + '</a>';
+  return (mailEnabled ? '<nav class="access-tabs" aria-label="Entrada a Calvario">' + tab('Acceso','#/inicio','perfil',!requesting) +
+    tab('Solicitud','#/solicitud','plus',requesting) + '</nav>' : '') +
     header(requesting ? 'Únete a la banda' : 'Acceso a la banda', requesting ? 'Tu solicitud requiere aprobación.' : '') +
     (offline ? '<p class="callout">Necesitas conexión para entrar o solicitar acceso.</p>' : '') +
     '<form class="stack" id="access-form">' +
     (requesting ? field('name','Nombre y apellidos','required autocomplete="name" maxlength="120"') : '') +
-    emailField() + field('password','Contraseña',password) +
+    emailField() + '<div class="password-field">' + field('password','Contraseña',password) +
+    '<button type="button" class="text-link" id="show-password" aria-label="Mostrar contraseña" aria-pressed="false">' + icon('eye') + '</button></div>' +
     (requesting ? '<p class="muted">Usa una contraseña de al menos 12 caracteres.</p><div class="field-grid">' +
       field('instrument','Instrumento','required maxlength="80"') + field('voice','Voz','maxlength="80"') + '</div>' :
       (mailEnabled ? link('¿Has olvidado la contraseña?','#/recuperar') : '')) +
     errorRegion + button(requesting ? 'Enviar solicitud' : 'Entrar') + '</form>' +
-    (requesting || !mailEnabled ? '' : '<p class="access-footer">¿Aún no tienes cuenta? ' + link('Solicitar acceso','#/solicitud') + '</p>');
+    (mailEnabled ? '' : '<p class="muted access-help">Si necesitas una cuenta, solicita el alta a la dirección de la banda.</p>');
 }
 
 function mailForm(route) {
@@ -114,6 +120,12 @@ export function access(shell, ctx, route, id) {
     ctx.toast('Revisa tu bandeja de entrada. El enlace puede tardar en llegar.');
   });
   const form = shell.querySelector('#access-form');
+  const reveal = form?.querySelector('#show-password');
+  if (reveal) reveal.onclick = () => {
+    const visible = form.elements.password.type === 'password';
+    form.elements.password.type = visible ? 'text' : 'password';
+    reveal.setAttribute('aria-pressed',String(visible));
+  };
   if (form) bindForm(form,async input => {
     await ctx.signIn(requesting,input);
     history.replaceState(null,'','#/inicio');
