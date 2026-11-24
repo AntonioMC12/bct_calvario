@@ -270,6 +270,29 @@ test('formación manual con versiones y retiro explícito', async () => {
   assert.equal((await admin(path)).data.positions[1],member);
 });
 
+test('dirección crea obras y carga partituras que siguen privadas hasta su validación', async () => {
+  const metadata = { title:'Obra de dirección',authors:'Autoría de prueba',genre:'Marcha' };
+  assert.equal((await musician('/works','POST',metadata)).status,403);
+  const created = await director('/works','POST',metadata);
+  assert.equal(created.status,201);
+  const id = created.data.id;
+  const lookup = async send => (await send('/dashboard')).data.works.find(item => item.id === id);
+  assert.deepEqual((await lookup(director)).scores,[]);
+  assert.equal(await lookup(musician),undefined);
+  const path = '/works/' + id + '/scores';
+  const input = { name:'direccion.pdf',instrument:'Corneta',voice:'Primera',content:samplePdf().toString('base64') };
+  assert.equal((await musician(path,'POST',input)).status,403);
+  const uploaded = await director(path,'POST',input);
+  assert.equal(uploaded.status,201);
+  const pdf = '/files/' + uploaded.data.id;
+  assert.equal((await lookup(director)).scores[0].approved,0);
+  assert.equal(await lookup(musician),undefined);
+  assert.equal((await musician(pdf)).status,404);
+  assert.equal((await director(pdf + '/approve','PUT',{})).status,200);
+  assert.equal((await lookup(musician)).scores[0].approved,1);
+  assert.equal((await musician(pdf)).type,'application/pdf');
+});
+
 test('PDF privado, duplicados, validación por dirección y baja', async () => {
   work = (await admin('/works','POST',{ title:'Obra',authors:'Autor; Otra autora',genre:'Marcha' })).data;
   const update = { title:'Obra revisada',authors:'Autor; Otra autora',genre:'Marcha' };
@@ -280,7 +303,7 @@ test('PDF privado, duplicados, validación por dirección y baja', async () => {
   assert.equal((await admin('/dashboard')).data.works.find(item => item.id === work.id).title,update.title);
   const path = '/works/' + work.id + '/scores';
   const input = { name:'partitura.pdf',instrument:'Corneta',voice:'Primera',content:samplePdf().toString('base64') };
-  assert.equal((await director(path,'POST',input)).status,403);
+  assert.equal((await musician(path,'POST',input)).status,403);
   assert.equal((await admin(path,'POST',{ ...input,content:'AAAA' })).status,422);
   const uploaded = await admin(path,'POST',input);
   assert.equal(uploaded.status,201);

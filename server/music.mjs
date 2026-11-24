@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import { digest } from './security.mjs';
 import { requireThat, text } from './http.mjs';
-import { audit, eventById } from './events.mjs';
+import { audit, eventById, managers } from './events.mjs';
 import { transaction } from './store.mjs';
 
 export async function catalog(db, member) {
@@ -15,7 +15,7 @@ export async function catalog(db, member) {
   const works = await db.prepare('SELECT * FROM works ORDER BY lower(title), title').all();
   return works
     .map(work => ({ ...work, scores: byWork.get(work.id) ?? [] }))
-    .filter(work => work.scores.length || member.role === 'admin');
+    .filter(work => work.scores.length || managers.includes(member.role));
 }
 
 export async function saveWork(db, input, id = null) {

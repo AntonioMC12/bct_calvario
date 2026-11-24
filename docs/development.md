@@ -1,5 +1,10 @@
 # Seguimiento del desarrollo
 
+## 2026-11-24 · Carga de partituras por dirección
+
+- RF31–RF32. Dirección puede entrar en Carga de partituras, crear obras y subir PDF en lotes. El catálogo de gestión muestra obras aún sin archivos para que puedan usarse como destino. Editar los datos de una obra existente sigue reservado a administración. Los PDF nuevos quedan privados hasta que dirección los valide expresamente.
+- Se comprobó en navegador el recorrido completo de carga y validación por dirección, incluida la visibilidad para el músico después de validar. Pasaron `npm run check`, 22 pruebas generales y 18 de PostgreSQL. La caché de la PWA pasa a `v9`.
+
 ## 2026-11-24 · Selector de tema
 
 - RF37–RF40. Perfil permite elegir tema Claro, Oscuro o Sistema. La preferencia se guarda en el navegador y se aplica antes de cargar los estilos. El modo Sistema sigue los cambios del dispositivo y la caché de la PWA pasa a `v8`.

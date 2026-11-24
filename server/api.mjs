@@ -302,12 +302,12 @@ export function createApi(db, { sendMail, accountClock, google, push, publicSite
       requireThat(result.changes, 404, 'Aviso no encontrado.');
       return json(response, 200, {});
     }
-    if (method === 'POST' && pathname === '/api/works') return json(response, 201, await saveWork(db, await inputFor(admins)));
+    if (method === 'POST' && pathname === '/api/works') return json(response, 201, await saveWork(db, await inputFor(managers)));
     route = pathname.match(/^\/api\/works\/([\w-]+)$/);
     if (route && method === 'PUT') return json(response,200,await saveWork(db,await inputFor(admins),route[1]));
     route = pathname.match(/^\/api\/works\/([\w-]+)\/scores$/);
     if (route && method === 'POST') {
-      return json(response, 201, await uploadPdf(db, member, await inputFor(admins, pdfLimit), { workId: route[1] }));
+      return json(response, 201, await uploadPdf(db, member, await inputFor(managers, pdfLimit), { workId: route[1] }));
     }
     route = pathname.match(/^\/api\/files\/([\w-]+)(\/approve)?$/);
     if (route) {

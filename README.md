@@ -17,7 +17,7 @@ Abre [localhost:3000](http://localhost:3000). El primer arranque crea `data/demo
 | --- | --- |
 | `musico@demo.invalid` | Consultar, responder, descargar partituras y confirmar lectura |
 | `administracion@demo.invalid` | Aprobar solicitudes, gestionar eventos, formaciones y carga musical |
-| `direccion@demo.invalid` | Aprobar solicitudes y gestionar eventos, corregir intenciones, pasar lista, validar partituras y publicar avisos |
+| `direccion@demo.invalid` | Aprobar solicitudes y gestionar eventos, corregir intenciones, pasar lista, cargar y validar partituras y publicar avisos |
 
 La base se reutiliza al volver a arrancar. Si necesitas otra contraseña de prueba, define `CALVARIO_DEMO_PASSWORD` en el entorno al iniciar la demo. Si ya existían las tres cuentas, se cambia su contraseña y se invalidan sus sesiones. `CALVARIO_DEMO_DB` permite crear una demo separada.
 
