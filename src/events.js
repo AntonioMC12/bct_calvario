@@ -219,16 +219,60 @@ function summary(members) {
 }
 
 function rollCall(content, ctx, event, members) {
-  content.insertAdjacentHTML('beforeend','<form class="card stack"><p class="muted">La presencia se registra por separado de la intención.</p>' +
-    '<div class="row-list">' + members.map(member => '<div class="row roll-row"><div><strong>' + esc(member.name) +
-    '</strong><p class="muted">' + otherIntention[member.intention] + '</p>' +
-    (member.reason ? '<p class="muted pre">Motivo privado: ' + esc(member.reason) + '</p>' : '') +
-    '</div><label><span class="sr-only">Presencia de ' + esc(member.name) + '</span><select name="' + member.id +
-    '">' + options(presence, member.presence) + '</select></label></div>').join('') +
-    '</div>' + errorRegion + button('Guardar presencia') + '</form>');
-  bindForm(content.querySelector('form'), async values => {
-    const rows = members.filter(member => member.presence !== values[member.id])
-      .map(member => ({ id:member.id, value:values[member.id] }));
+  if (!members.length) { content.insertAdjacentHTML('beforeend',empty('No hay componentes activos para pasar lista.')); return; }
+  const values = new Map(members.map(member => [member.id,member.presence]));
+  const status = [['present','Presente'],['absent','No presente'],['unset','Sin registrar']];
+  content.insertAdjacentHTML('beforeend','<form class="stack roll-call"><section class="card stack"><p class="muted">' +
+    'La presencia se registra por separado de la intención.</p><dl id="roll-totals" class="metrics"></dl>' +
+    '<div class="field-grid">' + field('query','Buscar por nombre o instrumento','type="search" autocomplete="off"') +
+    '<label>Estado de presencia<select name="filter"><option value="all">Todos</option>' + options(presence) + '</select></label></div>' +
+    button('Marcar presentes los pendientes visibles','quiet','type="button" id="roll-bulk"') +
+    '</section><div id="roll-list" class="stack"></div><div class="card roll-save">' + errorRegion +
+    '<p id="roll-changes" class="muted" role="status"></p>' + button('Guardar presencia') + '</div></form>');
+  const form = content.querySelector('.roll-call');
+  const list = form.querySelector('#roll-list');
+  const filter = () => members.filter(member => (form.elements.filter.value === 'all' ||
+    values.get(member.id) === form.elements.filter.value) && normalize([member.name, member.instrument, member.voice].join(' '))
+    .includes(normalize(form.elements.query.value)));
+  const changes = () => members.filter(member => member.presence !== values.get(member.id));
+  function drawSummary() {
+    const counts = Map.groupBy(values.values(), value => value);
+    const facts = [['Total',members.length],['Presentes', counts.get('present')?.length ?? 0],
+      ['No presentes',counts.get('absent')?.length ?? 0],['Sin registrar',counts.get('unset')?.length ?? 0]];
+    form.querySelector('#roll-totals').innerHTML = facts.map(([label,count]) => '<div><dt>' + label + '</dt><dd>' + count + '</dd></div>').join('');
+    form.querySelector('#roll-changes').textContent = changes().length + ' cambios por guardar';
+    form.querySelector('#roll-bulk').disabled = !filter().some(member => values.get(member.id) === 'unset');
+  }
+  function draw() {
+    const visible = filter();
+    list.innerHTML = visible.length ? visible.map(member => '<article class="card roll-person"><div class="event-labels">' +
+      '<div><h2>' + esc(member.name) + '</h2><p class="muted">' + instrument(member) + '</p></div>' + pill(otherIntention[member.intention]) + '</div>' +
+      (member.reason ? '<p class="muted pre">Motivo privado: ' + esc(member.reason) + '</p>' : '') +
+      '<fieldset class="roll-options" data-person="' + esc(member.id) + '"><legend class="sr-only">Presencia de ' + esc(member.name) + '</legend>' +
+      status.map(([key,label]) => '<label class="choice"><input type="radio" name="person-' + esc(member.id) + '" value="' + key +
+        '"' + (values.get(member.id) === key ? ' checked' : '') + '><span>' + label + '</span></label>').join('') + '</fieldset></article>').join('') :
+      empty('No hay componentes con esos filtros.');
+    drawSummary();
+  }
+  form.elements.query.oninput = draw;
+  form.elements.filter.onchange = draw;
+  list.onchange = ({target}) => {
+    const person = target.closest('[data-person]');
+    if (!person || !values.has(person.dataset.person)) return;
+    values.set(person.dataset.person,target.value);
+    // Keep focus and visible selection until the director changes the filters.
+    drawSummary();
+  };
+  form.querySelector('#roll-bulk').onclick = async () => {
+    const pending = filter().filter(member => values.get(member.id) === 'unset');
+    if (!pending.length || !await ctx.confirmAction('¿Marcar como presentes?', 'Se marcarán ' + pending.length + ' componentes visibles sin registrar.', 'Marcar presentes')) return;
+    pending.forEach(member => values.set(member.id,'present'));
+    draw();
+  };
+  draw();
+  bindForm(form, async () => {
+    const rows = changes().map(member => ({ id:member.id, value:values.get(member.id) }));
+    if (!rows.length) { ctx.toast('No hay cambios de presencia por guardar'); return; }
     await ctx.api('/events/' + event.id + '/presence','PUT',{ rows });
     await ctx.refresh();
     ctx.toast('Presencia guardada');
