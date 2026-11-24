@@ -1,5 +1,12 @@
 # Seguimiento del desarrollo
 
+## 2026-11-24 · Piloto alojado
+
+- GitHub Pages sirve la [PWA del piloto](https://antoniomc12.github.io/bct_calvario/) desde `gh-pages`. La compilación publica una lista cerrada de recursos estáticos y configura la URL de Supabase. El manifiesto y el service worker respetan la ruta `/bct_calvario/`.
+- Una Edge Function adapta la API de Calvario a Deno y reutiliza las consultas y las reglas de autorización. PostgreSQL conserva el esquema privado. Pages envía un identificador revocable de sesión en una cabecera. Las descargas privadas requieren la misma sesión.
+- La prueba de integración genera los dos paquetes y verifica con PostgreSQL local el acceso desde Pages, el rechazo de otro origen, la autenticación y revocación de sesión y la URL de recuperación. Se comprobó la resolución de dependencias del paquete Edge con Deno.
+- Quedan por aplicar el esquema y desplegar la función en el proyecto existente con una sesión de Supabase autorizada, aprovisionar una cuenta ficticia y verificar el acceso desde Pages. Google, la entrega real de correo y los trabajos programados de push requieren sus credenciales y pruebas aparte.
+
 ## 2026-11-24 · Base de datos Supabase v0.5
 
 - Se añadió PostgreSQL como opción del servidor y se conserva SQLite para desarrollo y demo. `pg` conecta al esquema privado `calvario` mediante TLS con certificado verificado. La API de Calvario conserva la autorización y Firebase sigue identificando a quienes usan Google.

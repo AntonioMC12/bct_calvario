@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { transaction } from './data.mjs';
+import { transaction } from './store.mjs';
 import { audit } from './events.mjs';
 import { requireThat } from './http.mjs';
 import { digest, hashPassword } from './security.mjs';
@@ -7,7 +7,7 @@ import { digest, hashPassword } from './security.mjs';
 const minute = 60000;
 const lifetime = { verify: 24 * 60 * minute, reset: 30 * minute };
 
-export function createAccountMail(db, sendMail, { now = Date.now } = {}) {
+export function createAccountMail(db, sendMail, { now = Date.now, background = action => setImmediate(action) } = {}) {
   async function issue(member, purpose, origin) {
     const timestamp = now();
     const id = randomBytes(32).toString('base64url');
@@ -23,7 +23,7 @@ export function createAccountMail(db, sendMail, { now = Date.now } = {}) {
     });
     if (!created) return;
     const verification = purpose === 'verify';
-    const link = new URL('/', origin);
+    const link = new URL(origin);
     link.hash = (verification ? '/verificar/' : '/restablecer/') + id;
     const message = {
       to: member.email,
@@ -32,7 +32,7 @@ export function createAccountMail(db, sendMail, { now = Date.now } = {}) {
         'Elige una contraseña nueva con este enlace. Caduca en 30 minutos.') +
         '\n\n' + link.href + '\n\nSi no hiciste esta solicitud, puedes ignorar este mensaje.',
     };
-    setImmediate(async () => {
+    background(async () => {
       try {
         await sendMail(message);
       } catch {

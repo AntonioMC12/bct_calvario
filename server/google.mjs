@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { applicationDefault, initializeApp } from 'firebase-admin/app';
+import { applicationDefault, cert, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { transaction } from './data.mjs';
+import { transaction } from './store.mjs';
 import { audit } from './events.mjs';
 import { choice, requireThat, text } from './http.mjs';
 import { checkPassword, getMember, startSession, tokenHash } from './security.mjs';
@@ -14,11 +14,12 @@ export function configureGoogle(env = process.env) {
       !/^1:[0-9]+:web:[a-f0-9]+$/.test(appId || '')) {
     throw new Error('Revisa el ID de proyecto, la API key pública y el App ID de Firebase.');
   }
-  if (process.env.FIREBASE_AUTH_EMULATOR_HOST) {
+  if (env.FIREBASE_AUTH_EMULATOR_HOST) {
     throw new Error('El emulador de Firebase Auth no se admite en esta instancia.');
   }
   const authDomain = projectId + '.firebaseapp.com';
-  const auth = getAuth(initializeApp({ projectId, credential:applicationDefault() },'calvario'));
+  const credential = env.CALVARIO_FIREBASE_ADMIN_JSON ? cert(JSON.parse(env.CALVARIO_FIREBASE_ADMIN_JSON)) : applicationDefault();
+  const auth = getAuth(initializeApp({ projectId, credential },'calvario'));
   return { config:{ projectId, apiKey, appId, authDomain }, verifyToken:token => auth.verifyIdToken(token,true) };
 }
 
@@ -53,7 +54,7 @@ async function recordIdentity(db, identity, id) {
   await audit(db,id,'access.link_google',id);
 }
 
-export async function authenticateWithGoogle(db, provider, request, input, secure) {
+export async function authenticateWithGoogle(db, provider, request, input) {
   requireThat(provider, 404, 'El acceso con Google todavía no está configurado.');
   const mode = choice(input.mode,['login','register','link'],'Acción');
   const idToken = text(input.idToken,8192,'Credencial de Firebase',true);
@@ -99,7 +100,7 @@ export async function authenticateWithGoogle(db, provider, request, input, secur
     requireThat(!await getMember(db,request),409,'La sesión ha cambiado. Cierra sesión y vuelve a intentarlo.');
     if (linked) {
       requireThat(['pending','active'].includes(linked.status),403,'La cuenta de Calvario no tiene acceso.');
-      return { cookie:await startSession(db,linked.id,secure) };
+      return { token:await startSession(db,linked.id,request.hosted) };
     }
     requireThat(!await db.prepare('SELECT 1 FROM members WHERE email = ?').get(identity.email),409,
       'Ya hay una cuenta con ese correo. Entra con tu contraseña y vincula Google desde Perfil.', 'link_required');
@@ -114,6 +115,6 @@ export async function authenticateWithGoogle(db, provider, request, input, secur
       VALUES (?, ?, '', ?, ?, ?, ?, ?, 0)
     `).run(id,identity.email,name,instrument,voice,timestamp,timestamp);
     await recordIdentity(db,identity,id);
-    return { cookie:await startSession(db,id,secure) };
+    return { token:await startSession(db,id,request.hosted) };
   });
 }

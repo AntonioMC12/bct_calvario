@@ -1,7 +1,8 @@
 import { back, bindForm, button, empty, errorRegion, header } from './ui.js';
 
-const cacheName = 'calvario-device-push';
-const bindingPath = '/_calvario-push-binding';
+const root = new URL('../',import.meta.url);
+const cacheName = 'calvario-device-push' + (root.pathname === '/' ? '' : root.pathname);
+const bindingPath = new URL('_calvario-push-binding',root).href;
 
 async function setBinding(binding) {
   const cache = await caches.open(cacheName);

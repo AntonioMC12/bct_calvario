@@ -1,5 +1,6 @@
 import { randomBytes, scrypt, timingSafeEqual, createHash } from 'node:crypto';
 import { promisify } from 'node:util';
+import { Buffer } from 'node:buffer';
 
 const derive = promisify(scrypt);
 export const digest = value => createHash('sha256').update(value).digest('hex');
@@ -19,15 +20,21 @@ const LIFETIME = 7 * 86400;
 const cookie = (value, secure) => 'calvario_session=' + value + '; HttpOnly; SameSite=Strict; Path=/' +
   (secure ? '; Secure' : '');
 export const expiredCookie = secure => cookie('',secure) + '; Max-Age=0';
+export const sessionCookie = (token,secure) => cookie(token,secure) + '; Max-Age=' + LIFETIME;
 
-export async function startSession(db, memberId, secure = false) {
+export async function startSession(db, memberId, hosted = false) {
   const token = randomBytes(32).toString('hex');
   await db.prepare('DELETE FROM sessions WHERE expires <= ?').run(Date.now());
-  await db.prepare('INSERT INTO sessions VALUES (?, ?, ?)').run(digest(token), memberId, Date.now() + LIFETIME * 1000);
-  return cookie(token,secure) + '; Max-Age=' + LIFETIME;
+  const duration = hosted ? 8 * 3600 : LIFETIME;
+  await db.prepare('INSERT INTO sessions VALUES (?, ?, ?)').run(digest(token), memberId, Date.now() + duration * 1000);
+  return token;
 }
 
 export function tokenHash(request) {
+  if (request.hosted) {
+    const token = request.headers['x-calvario-session'];
+    return typeof token === 'string' && /^[0-9a-f]{64}$/.test(token) ? digest(token) : '';
+  }
   const match = request.headers.cookie?.match(/(?:^|;\s*)calvario_session=([0-9a-f]{64})(?:;|$)/);
   return match ? digest(match[1]) : '';
 }

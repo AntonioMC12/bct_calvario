@@ -21,6 +21,31 @@ Abre [localhost:3000](http://localhost:3000). El primer arranque crea `data/demo
 
 La base se reutiliza al volver a arrancar. Si necesitas otra contraseña de prueba, define `CALVARIO_DEMO_PASSWORD` en el entorno al iniciar la demo. Si ya existían las tres cuentas, se cambia su contraseña y se invalidan sus sesiones. `CALVARIO_DEMO_DB` permite crear una demo separada.
 
+## Piloto en GitHub Pages y Supabase
+
+La [aplicación del piloto](https://antoniomc12.github.io/bct_calvario/) se publica desde la raíz de la rama `gh-pages`. Pages sirve la PWA. La función `calvario-api` del proyecto Supabase `vsmmpccqaywetuiyhevm` ejecuta la API y conecta con el esquema privado `calvario`. El navegador almacena temporalmente la sesión del piloto en la pestaña. En desarrollo local, el servidor sigue usando su cookie HTTP-only.
+
+Con Node.js 24 y la CLI de Supabase 3.3, genera ambos paquetes desde PowerShell en la raíz del repositorio. Utiliza una ruta de salida nueva en cada compilación.
+
+```powershell
+$env:CALVARIO_EDGE_URL = 'https://vsmmpccqaywetuiyhevm.supabase.co/functions/v1/calvario-api'
+npm run build:pilot -- dist/piloto
+npx supabase login
+npx supabase db query --remote=vsmmpccqaywetuiyhevm --read-only "SELECT to_regnamespace('calvario') AS schema, to_regclass('calvario.schema_version') AS version_table;"
+```
+
+Si el esquema está libre, inicialízalo y despliega la función. Si ya existe, comprueba su versión y sus tablas antes de reutilizarlo.
+
+```powershell
+npx supabase db query --remote=vsmmpccqaywetuiyhevm --file dist/piloto/edge/schema.sql --yes
+npx supabase functions deploy calvario-api --remote=vsmmpccqaywetuiyhevm --workdir dist/piloto/edge --use-api --yes
+Invoke-RestMethod "$env:CALVARIO_EDGE_URL/health"
+```
+
+La comprobación devuelve `status: ready` cuando la función puede leer la versión del esquema. Crea la primera cuenta de administración con `npm run account` y la conexión privada a PostgreSQL descrita más abajo. Para publicar cambios en la PWA, copia el contenido de `dist/piloto/pages`, incluido `.nojekyll`, a la rama `gh-pages`. El paquete `dist/piloto/edge`, los secretos, los datos y los ficheros `.env` quedan fuera de Pages.
+
+La función usa la conexión PostgreSQL del entorno Supabase. Si necesitas un pooler explícito o un certificado de CA, configura `CALVARIO_EDGE_DATABASE_URL` y `CALVARIO_DATABASE_CA_PEM` como secretos de la función. Para habilitar la entrega de correos en el piloto, configura `CALVARIO_RESEND_API_KEY` y un `CALVARIO_MAIL_FROM` con un remitente verificado. El acceso con Google utiliza las variables públicas de Firebase descritas abajo y el secreto `CALVARIO_FIREBASE_ADMIN_JSON` en la función. Los recordatorios y los reintentos de Web Push requieren programar una llamada `POST` a `/jobs` de la función con la cabecera `X-Calvario-Job` y el valor privado de `CALVARIO_JOB_SECRET`.
+
 ## Arrancar con una base vacía
 
 ```sh
@@ -105,6 +130,7 @@ El comando `npm run backup` respalda SQLite y comprueba su integridad. Para ensa
 - `src/` contiene vistas, componentes, fechas y datos sin conexión.
 - `server/` contiene la API, la autorización, las reglas y la migración SQLite.
 - `scripts/` contiene el servidor local, la demo, las cuentas operativas y la copia.
+- `deployment/edge/` contiene el adaptador Supabase y su configuración de despliegue.
 - `public/` contiene el escudo original, los iconos derivados y las fuentes Inter y Cinzel con sus licencias OFL.
 - `docs/development.md` registra cobertura, pruebas y decisiones. `AGENTS.md` orienta las siguientes sesiones.
 

@@ -34,7 +34,7 @@ function googleClient(config) {
 
 export function googleButton(label) {
   return '<button class="button google-button" type="submit" disabled>' +
-    '<img src="/public/google-g.png" width="18" height="18" alt="">' + label + '</button>';
+    '<img src="./public/google-g.png" width="18" height="18" alt="">' + label + '</button>';
 }
 
 export function bindGoogle(form, config, useToken) {

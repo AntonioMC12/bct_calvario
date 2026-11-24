@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { body, choice, HttpError, json, requireThat, text } from './http.mjs';
-import { checkPassword, endSession, expiredCookie, getMember, hashPassword, startSession, tokenHash } from './security.mjs';
+import { checkPassword, endSession, expiredCookie, getMember, hashPassword, sessionCookie, startSession, tokenHash } from './security.mjs';
 import { audit, calendarFile, cancelEvent, eventById, eventDetail, eventList, managers, notify, saveEvent, saveIntention, savePresence, sendDueReminders } from './events.mjs';
 import { catalog, createWork, servePdf, approveScore, uploadPdf } from './music.mjs';
 import { formation, saveFormation, saveTemplate } from './formations.mjs';
-import { transaction } from './data.mjs';
+import { transaction } from './store.mjs';
 import { createAccountMail } from './account-mail.mjs';
 import { authenticateWithGoogle } from './google.mjs';
 import { subscribe, unsubscribe } from './push.mjs';
@@ -13,6 +13,12 @@ const directors = ['director'];
 const admins = ['admin'];
 const pdfLimit = 7_100_000;
 const now = () => new Date().toISOString();
+
+function loginResult(request,response,status,token,secure,value = {}) {
+  if (!token) return json(response,status,value);
+  if (request.hosted) return json(response,status,{ ...value,sessionToken:token });
+  return json(response,status,value,{ 'Set-Cookie':sessionCookie(token,secure) });
+}
 
 function publicAccount(member) {
   if (!member) return null;
@@ -66,9 +72,9 @@ async function dashboard(db, member) {
   return { member, events, notices, works, updatedAt: now() };
 }
 
-export function createApi(db, { sendMail, accountClock, google, push } = {}) {
+export function createApi(db, { sendMail, accountClock, google, push, publicSite, background } = {}) {
   const dummyHash = hashPassword(randomUUID());
-  const accountMail = createAccountMail(db, sendMail, { now: accountClock });
+  const accountMail = sendMail && createAccountMail(db,sendMail,{ now:accountClock,background });
   const attempts = new Map();
 
   function rateLimit(request, operation, limit, interval) {
@@ -92,29 +98,30 @@ export function createApi(db, { sendMail, accountClock, google, push } = {}) {
 
     if (method === 'GET' && pathname === '/api/session') {
       return json(response, 200, { member: publicAccount(member), google: google?.config ?? null,
-        pushEnabled: Boolean(push) });
+        pushEnabled: Boolean(push), mailEnabled:Boolean(accountMail) });
     }
 
     if (method === 'POST' && pathname === '/api/logout') {
       await body(request);
       await endSession(db, request);
-      return json(response, 200, {}, { 'Set-Cookie': expiredCookie(secure) });
+      return json(response, 200, {}, request.hosted ? {} : { 'Set-Cookie':expiredCookie(secure) });
     }
 
     if (method === 'POST' && pathname === '/api/auth/google') {
       rateLimit(request, 'google', 20, 60000);
-      const result = await authenticateWithGoogle(db,google,request,await body(request),secure);
-      return json(response,200,{ linked:Boolean(result.linked) },result.cookie ? { 'Set-Cookie':result.cookie } : {});
+      const result = await authenticateWithGoogle(db,google,request,await body(request));
+      return loginResult(request,response,200,result.token,secure,{ linked:Boolean(result.linked) });
     }
 
     if (method === 'POST' && ['/api/account/forgot','/api/account/resend','/api/account/verify','/api/account/reset'].includes(pathname)) {
+      requireThat(accountMail,503,'El envío de correo aún no está configurado para este piloto.');
       const input = await body(request);
       if (pathname === '/api/account/forgot') {
         rateLimit(request, 'technical-mail', 8, 300000);
         const recipient = await db.prepare(`
           SELECT id, email FROM members WHERE email = ? AND status IN ('active','pending') AND password_enabled = 1
         `).get(email(input.email));
-        if (recipient) await accountMail.issue(recipient, 'reset', expectedOrigin);
+        if (recipient) await accountMail.issue(recipient, 'reset', publicSite ?? expectedOrigin);
         return json(response, 202, {});
       }
       if (pathname === '/api/account/resend') {
@@ -123,7 +130,7 @@ export function createApi(db, { sendMail, accountClock, google, push } = {}) {
         requireThat(current && current.id === member?.id && current.status === 'pending', 403, 'Inicia sesión con la solicitud pendiente.');
         requireThat(!request.headers['x-calvario-account'] || request.headers['x-calvario-account'] === current.id,
           409, 'La cuenta activa ha cambiado.', 'account_changed');
-        if (!current.email_verified_at) await accountMail.issue(current, 'verify', expectedOrigin);
+        if (!current.email_verified_at) await accountMail.issue(current, 'verify', publicSite ?? expectedOrigin);
         return json(response, 202, {});
       }
       rateLimit(request, 'account-token', 20, 60000);
@@ -141,6 +148,7 @@ export function createApi(db, { sendMail, accountClock, google, push } = {}) {
       let id;
       let verifiedHash;
       if (signup) {
+        requireThat(accountMail,503,'El alta por correo aún no está configurada para este piloto.');
         const name = text(input.name, 120, 'Nombre y apellidos', true);
         const instrument = text(input.instrument, 80, 'Instrumento', true);
         const voice = text(input.voice, 80, 'Voz');
@@ -151,7 +159,7 @@ export function createApi(db, { sendMail, accountClock, google, push } = {}) {
           VALUES (?, ?, ?, ?, ?, ?, ?, 1) ON CONFLICT(email) DO NOTHING
         `).run(id, address, hash, name, instrument, voice, now());
         requireThat(inserted.changes, 409, 'Ya existe una cuenta con este correo. Prueba a iniciar sesión.');
-        await accountMail.issue({ id, email: address }, 'verify', expectedOrigin);
+        await accountMail.issue({ id, email: address }, 'verify', publicSite ?? expectedOrigin);
       } else {
         const match = await db.prepare('SELECT id, password FROM members WHERE email = ? AND password_enabled = 1').get(address);
         const valid = await checkPassword(secret, match?.password ?? await dummyHash);
@@ -165,9 +173,9 @@ export function createApi(db, { sendMail, accountClock, google, push } = {}) {
           requireThat(current?.password === verifiedHash, 401, 'El correo o la contraseña son incorrectos.');
         }
         await endSession(db, request);
-        return await startSession(db, id, secure);
+        return await startSession(db,id,request.hosted);
       });
-      return json(response, signup ? 201 : 200, {}, { 'Set-Cookie': session });
+      return loginResult(request,response,signup ? 201 : 200,session,secure);
     }
 
     requireThat(member, 401, 'Tu sesión ha caducado. Vuelve a entrar.');

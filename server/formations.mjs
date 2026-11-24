@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { transaction } from './data.mjs';
+import { transaction } from './store.mjs';
 import { integer, requireThat, text } from './http.mjs';
 import { audit, eventById } from './events.mjs';
 

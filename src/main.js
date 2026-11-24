@@ -7,12 +7,14 @@ import { management, eventEditor, formationEditor, composeNotice } from './manag
 import { access, mailRoutes } from './access.js';
 import { bindGoogle, googleButton } from './google.js';
 import { clearPush, pushSettings } from './push.js';
+import { backend, captureSession, clearSession, hosted, openPrivateLink, suspendSession } from './connection.js';
 
 const shell = document.querySelector('#shell');
 const dialog = document.querySelector('#dialog');
 const status = document.querySelector('#feedback');
 const destinations = [['inicio','Inicio'], ['calendario','Calendario'], ['repertorio','Repertorio'], ['avisos','Avisos'], ['perfil','Perfil']];
-const state = { member: null, data: null, pending: {}, saved: new Set(), offline: false, cacheReady: false };
+const state = { member:null, data:null, pending:{}, saved:new Set(), offline:false, cacheReady:false,
+  mailEnabled:!hosted, pilotUnavailable:hosted };
 let rendering = 0;
 let toastTimer;
 
@@ -24,7 +26,7 @@ export async function api(path, method = 'GET', data, timeout = 12000) {
   }
   if (data !== undefined) headers['Content-Type'] = 'application/json';
   try {
-    response = await fetch('/api' + path, {
+    response = await backend(path,{
       method, headers, cache: 'no-store', signal: AbortSignal.timeout(timeout),
       ...(data === undefined ? {} : { body: JSON.stringify(data) }),
     });
@@ -40,6 +42,7 @@ export async function api(path, method = 'GET', data, timeout = 12000) {
     error.code = payload.code;
     throw error;
   }
+  captureSession(path,payload);
   return payload;
 }
 
@@ -67,6 +70,7 @@ async function reset(member = null) {
 
 function networkFailure(error) {
   if (error.status === 401 || error.code === 'inactive' || error.code === 'account_changed') {
+    clearSession();
     reset().then(render);
     toast(error.message);
   } else if (error.network) {
@@ -106,10 +110,11 @@ async function restore() {
       await api('/logout', 'POST', {});
       clearLocalSignout();
     }
-    const { member, google, pushEnabled } = await api('/session');
-    Object.assign(state,{ google,pushEnabled });
+    const { member, google, pushEnabled, mailEnabled } = await api('/session');
+    Object.assign(state,{ google,pushEnabled,mailEnabled,pilotUnavailable:false });
     state.offline = false;
     local = getLocal();
+    if (!member) clearSession();
     if (!member || member.status !== 'active' || (local.account && local.account !== member.id)) await reset(member);
     state.member = member;
     if (member?.status === 'active') {
@@ -215,6 +220,7 @@ async function logout() {
     if (!error.network) throw error;
     markLocalSignout();
   }
+  suspendSession();
   await reset();
   go('#/inicio');
   render();
@@ -416,6 +422,12 @@ setInterval(() => {
 window.addEventListener('storage', event => {
   if (event.key === 'calvario:v1:account' && getLocal().account !== state.member?.id) bootstrap();
 });
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+if (hosted) shell.addEventListener('click',event => {
+  const link = event.target.closest?.('a[href^="/api/"]');
+  if (!link) return;
+  event.preventDefault();
+  openPrivateLink(link).catch(error => toast(error.message));
+});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
 shell.innerHTML = '<main class="loading" role="status">Cargando Calvario…</main>';
 await bootstrap();

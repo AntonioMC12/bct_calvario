@@ -1,0 +1,6 @@
+project_id = "calvario-api"
+
+[functions.calvario-api]
+verify_jwt = false
+entrypoint = "./functions/calvario-api/index.mjs"
+import_map = "./functions/calvario-api/deno.json"

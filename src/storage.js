@@ -1,3 +1,5 @@
+import { backend } from './connection.js';
+
 const prefix = 'calvario:v1:';
 const accountKey = prefix + 'account';
 const signoutKey = 'calvario:cerrar-sesion-pendiente';
@@ -66,7 +68,7 @@ export async function savedFiles(account) {
 
 export async function savePdf(account, file) {
   if (!globalThis.caches || getLocal().account !== account) throw new Error('Las descargas no están disponibles.');
-  const response = await fetch(fileUrl(file), { cache: 'no-store', headers: { 'X-Calvario-Account': account } });
+  const response = await backend('/files/' + file.id,{ headers:{ 'X-Calvario-Account':account } });
   if (!response.ok || response.headers.get('content-type') !== 'application/pdf') {
     const error = new Error('No se ha podido descargar la partitura.');
     error.status = response.status;

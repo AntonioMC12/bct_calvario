@@ -6,7 +6,7 @@ const emailField = () => field('email','Correo electrónico','type="email" requi
 const newPassword = 'type="password" required minlength="12" maxlength="128" autocomplete="new-password"';
 
 function accessFrame(body) {
-  return '<main class="access"><div class="access-brand"><img src="/public/escudo.png" alt="Escudo de Calvario" width="210" height="210">' +
+  return '<main class="access"><div class="access-brand"><img src="./public/escudo.png" alt="Escudo de Calvario" width="210" height="210">' +
     '<p>Banda de Cornetas y Tambores<br>Santísimo Cristo del Calvario</p></div><div class="access-body">' +
     '<section class="access-panel">' + body + '</section></div></main>';
 }
@@ -23,7 +23,7 @@ function accountStatus(member) {
     button('Cerrar sesión','secondary','id="signout"') + '</div>';
 }
 
-function accessForm(requesting, offline) {
+function accessForm(requesting, offline, mailEnabled) {
   const password = requesting ? newPassword : 'type="password" required maxlength="128" autocomplete="current-password"';
   return (requesting ? back('Acceso','#/inicio') : '') +
     header(requesting ? 'Únete a la banda' : 'Acceso a la banda', requesting ? 'Tu solicitud requiere aprobación.' : '') +
@@ -33,9 +33,9 @@ function accessForm(requesting, offline) {
     emailField() + field('password','Contraseña',password) +
     (requesting ? '<p class="muted">Usa una contraseña de al menos 12 caracteres.</p><div class="field-grid">' +
       field('instrument','Instrumento','required maxlength="80"') + field('voice','Voz','maxlength="80"') + '</div>' :
-      link('¿Has olvidado la contraseña?','#/recuperar')) +
+      (mailEnabled ? link('¿Has olvidado la contraseña?','#/recuperar') : '')) +
     errorRegion + button(requesting ? 'Enviar solicitud' : 'Entrar') + '</form>' +
-    (requesting ? '' : '<p class="access-footer">¿Aún no tienes cuenta? ' + link('Solicitar acceso','#/solicitud') + '</p>');
+    (requesting || !mailEnabled ? '' : '<p class="access-footer">¿Aún no tienes cuenta? ' + link('Solicitar acceso','#/solicitud') + '</p>');
 }
 
 function mailForm(route) {
@@ -61,8 +61,15 @@ function mailForm(route) {
 }
 
 export function access(shell, ctx, route, id) {
-  const requesting = route === 'solicitud';
+  const requesting = route === 'solicitud' && ctx.state.mailEnabled;
   const member = ctx.state.member;
+  if (!member && ctx.state.pilotUnavailable) {
+    shell.innerHTML = accessFrame(header('Piloto de Calvario') +
+      '<p class="muted" role="status">El servidor del piloto todavía no está disponible.</p>' +
+      button('Reintentar','secondary','id="retry"'));
+    shell.querySelector('#retry').addEventListener('click',ctx.bootstrap);
+    return;
+  }
   if (mailRoutes.includes(route)) {
     shell.innerHTML = accessFrame(mailForm(route));
     bindForm(shell.querySelector('#mail-form'), async input => {
@@ -88,7 +95,7 @@ export function access(shell, ctx, route, id) {
   const federated = google ? '<form class="stack google-access" id="google-form">' + errorRegion +
     googleButton('Continuar con Google') + '</form>' : '';
   shell.innerHTML = accessFrame(member && member.status !== 'active' ? accountStatus(member) :
-    accessForm(requesting,ctx.state.offline) + federated);
+    accessForm(requesting,ctx.state.offline,ctx.state.mailEnabled) + federated);
   if (google) bindGoogle(shell.querySelector('#google-form'),google,async idToken => {
     try {
       await ctx.api('/auth/google','POST',{ mode:'login',idToken });

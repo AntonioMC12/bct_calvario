@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "pg": "npm:pg@8.23.1",
+    "firebase-admin/app": "npm:firebase-admin@14.5.1/app",
+    "firebase-admin/auth": "npm:firebase-admin@14.5.1/auth",
+    "web-push": "npm:web-push@4.0.0"
+  }
+}

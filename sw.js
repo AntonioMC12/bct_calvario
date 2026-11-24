@@ -1,9 +1,14 @@
-const SHELL = 'calvario-shell-v4';
+const app = new URL(self.registration.scope);
+const cachePrefix = 'calvario-shell-' + app.pathname + ':';
+const SHELL = cachePrefix + 'v5';
+const pushCache = 'calvario-device-push' + (app.pathname === '/' ? '' : app.pathname);
+const pushBinding = new URL('_calvario-push-binding',app).href;
 const assets = ['/', '/manifest.webmanifest', '/public/escudo.png', '/public/icon-192.png', '/public/icon-512.png',
   '/public/inter.woff2', '/public/cinzel.woff2',
   '/src/main.js', '/src/ui.js', '/src/time.js', '/src/storage.js', '/src/styles.css',
   '/src/events.js', '/src/repertoire.js', '/src/management.js', '/src/access.js',
-  '/src/google.js', '/src/push.js', '/public/google-g.png'];
+  '/src/google.js', '/src/push.js', '/public/google-g.png', '/src/connection.js', '/src/runtime.js']
+  .map(path => new URL(path.slice(1),app).href);
 const assetPaths = new Set(assets);
 
 self.addEventListener('install', event => {
@@ -12,15 +17,15 @@ self.addEventListener('install', event => {
 
 self.addEventListener('activate', event => {
   event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key =>
-    key.startsWith('calvario-shell-') && key !== SHELL).map(key => caches.delete(key)))).then(() => self.clients.claim()));
+    (key.startsWith(cachePrefix) || (app.pathname === '/' && key === 'calvario-shell-v4')) && key !== SHELL).map(key => caches.delete(key)))).then(() => self.clients.claim()));
 });
 
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
-  if (event.request.method !== 'GET' || url.origin !== location.origin || !assetPaths.has(url.pathname)) return;
+  if (event.request.method !== 'GET' || url.origin !== location.origin || !assetPaths.has(url.origin + url.pathname)) return;
   event.respondWith(fetch(event.request).catch(async () => {
     const cache = await caches.open(SHELL);
-    return (await cache.match(url.pathname)) ?? Response.error();
+    return (await cache.match(url.origin + url.pathname)) ?? Response.error();
   }));
 });
 
@@ -29,10 +34,10 @@ self.addEventListener('push', event => {
     let payload;
     try { payload = event.data?.json(); } catch { return; }
     if (!payload || !/^[0-9a-f-]{36}$/.test(payload.notice) || !/^[0-9a-f-]{36}$/.test(payload.binding)) return;
-    const local = await (await caches.open('calvario-device-push')).match('/_calvario-push-binding');
+    const local = await (await caches.open(pushCache)).match(pushBinding);
     if (!local || await local.text() !== payload.binding) return;
     await self.registration.showNotification('Calvario',{
-      body:'Tienes un aviso nuevo en la aplicación.', icon:'/public/icon-192.png',
+      body:'Tienes un aviso nuevo en la aplicación.', icon:new URL('public/icon-192.png',app).href,
       tag:'calvario-' + payload.notice, data:{ notice:payload.notice, binding:payload.binding },
     });
   })());
@@ -43,10 +48,11 @@ self.addEventListener('notificationclick', event => {
   event.waitUntil((async () => {
     const { notice, binding } = event.notification.data ?? {};
     if (!/^[0-9a-f-]{36}$/.test(notice) || !/^[0-9a-f-]{36}$/.test(binding)) return;
-    const local = await (await caches.open('calvario-device-push')).match('/_calvario-push-binding');
+    const local = await (await caches.open(pushCache)).match(pushBinding);
     if (!local || await local.text() !== binding) return;
-    const target = new URL('/#/avisos/' + notice,self.location.origin).href;
-    const [window] = await self.clients.matchAll({ type:'window',includeUncontrolled:true });
+    const target = new URL('#/avisos/' + notice,app).href;
+    const windows = await self.clients.matchAll({ type:'window',includeUncontrolled:true });
+    const window = windows.find(client => client.url.startsWith(app.href));
     if (window) {
       try {
         const page = await window.navigate(target);

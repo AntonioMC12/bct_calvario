@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
+import { Buffer } from 'node:buffer';
 import { digest } from './security.mjs';
 import { requireThat, text } from './http.mjs';
 import { audit, eventById } from './events.mjs';
-import { transaction } from './data.mjs';
+import { transaction } from './store.mjs';
 
 export async function catalog(db, member) {
   const scores = await db.prepare(`
