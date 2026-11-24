@@ -9,10 +9,13 @@ const paths = {
   calendario: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4m10-4v4M3 10h18m-13 4h.01m4 0h.01m4 0h.01m-8 3h.01m4 0h.01"/>',
   repertorio: '<path d="M9 17V5l11-2v12M9 9l11-2"/><ellipse cx="6" cy="17.5" rx="3" ry="2.5"/><ellipse cx="17" cy="15.5" rx="3" ry="2.5"/>',
   avisos: '<rect x="3" y="4" width="18" height="16" rx="4"/><path d="M3 13h5l2 3h4l2-3h5"/>',
+  bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 12a2 2 0 0 0 4 0"/>',
   perfil: '<circle cx="12" cy="7" r="4"/><path d="M4 21v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2"/>',
   gestion: '<rect x="3" y="7" width="18" height="13" rx="3"/><path d="M8 7V4h8v3M3 13h18m-11 0v2h4v-2"/>',
   right: '<path d="m9 6 6 6-6 6"/>',
   left: '<path d="m15 6-6 6 6 6"/>',
+  arrow: '<path d="M4 12h15m-6-6 6 6-6 6"/>',
+  list: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/>',
   map: '<path d="M20 10c0 6-8 11-8 11S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>',
   file: '<path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6"/>',
@@ -40,7 +43,6 @@ const fmt = options => new Intl.DateTimeFormat('es-ES', { ...options, timeZone: 
 const full = fmt({ weekday: 'long', day: 'numeric', month: 'long' });
 const dateAndTime = fmt({ day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 const time = fmt({ hour: '2-digit', minute: '2-digit' });
-const month = fmt({ month: 'short' });
 const capitalize = s => s.charAt(0).toUpperCase() + s.slice(1);
 
 export const fullDate = date => capitalize(full.format(new Date(date)));
@@ -58,7 +60,8 @@ export function header(title, subtitle = '', action = '', eyebrow = '') {
     '<h1 tabindex="-1">' + esc(title) + '</h1>' + (subtitle ? '<p class="muted">' + esc(subtitle) + '</p>' : '') +
     '</div>' + action + '</header>';
 }
-export const sectionTitle = (title, action = '') => '<div class="section-head"><h2>' + esc(title) + '</h2>' + action + '</div>';
+export const sectionTitle = (title, action = '', glyph = '') => '<div class="section-head"><h2>' +
+  (glyph ? icon(glyph) : '') + esc(title) + '</h2>' + action + '</div>';
 export const link = (label, href) => '<a class="text-link" href="' + esc(href) + '">' + esc(label) + '</a>';
 export const back = (label, href) => '<a class="back" href="' + esc(href) + '">' + icon('left') + esc(label) + '</a>';
 export const empty = message => '<p class="card empty muted">' + esc(message) + '</p>';
@@ -75,8 +78,8 @@ export const area = (name, label, attributes = '', value = '') => '<label>' + es
 export const options = (items, current) => Object.entries(items).map(([value,label]) =>
   '<option value="' + esc(value) + '"' + (value === current ? ' selected' : '') + '>' + esc(label) + '</option>').join('');
 export const segment = (name, entries, current) => '<div class="segments" role="group" aria-label="' + esc(name) + '">' +
-  entries.map(([value, label]) => '<button type="button" data-value="' + esc(value) + '" aria-pressed="' +
-    (value === current) + '">' + esc(label) + '</button>').join('') + '</div>';
+  entries.map(([value, label, glyph]) => '<button type="button" data-value="' + esc(value) + '" aria-pressed="' +
+    (value === current) + '">' + (glyph ? icon(glyph) : '') + esc(label) + '</button>').join('') + '</div>';
 
 export function bindForm(form, submit) {
   form.addEventListener('submit', async event => {
@@ -101,14 +104,21 @@ export function bindForm(form, submit) {
   });
 }
 
-export function eventCard(event, pending) {
-  const date = new Date(event.starts);
-  const status = event.cancelled ? 'Evento cancelado' : intention[event.intention];
-  const day = dayKey(date).slice(8);
-  return '<article class="card event-card"><div class="event-summary"><div class="date-chip" aria-hidden="true">' +
-    '<span>' + month.format(date).replace('.', '') + '</span><strong>' + day + '</strong></div><div><p class="eyebrow">' +
-    esc(event.type) + '</p><h3>' + esc(event.title) + '</h3><p class="muted">' + fullDate(date) + ' · ' + timeRange(event) +
-    '</p><p class="muted">' + esc([event.location,event.town].filter(Boolean).join(' · ')) + '</p></div></div>' +
-    '<div class="event-footer"><span class="status">' + icon(event.intention === 'yes' && !event.cancelled ? 'check' : 'clock') +
-    esc(status) + (pending ? ' · Pendiente de envío' : '') + '</span>' + link('Ver evento', '#/calendario/' + event.id) + '</div></article>';
+export function attendanceBadge(value) {
+  const tone = { yes: 'good', no: 'accent', unset: 'waiting' };
+  return pill(intention[value], tone[value]);
+}
+
+export function eventCard(event, pending, { featured = false } = {}) {
+  const location = [event.location,event.town].filter(Boolean).join(' · ');
+  const status = event.cancelled ? pill('Evento cancelado', 'accent') : attendanceBadge(event.intention);
+  return '<article class="card event-card"><div class="event-labels">' + pill(event.type) + status + '</div>' +
+    '<h3>' + esc(event.title) + '</h3>' +
+    (featured && event.description ? '<p class="muted excerpt">' + esc(event.description) + '</p>' : '') +
+    '<div class="event-meta">' +
+    '<p>' + icon('clock') + '<span>' + fullDate(event.starts) + ' · ' + timeRange(event) + '</span></p>' +
+    (location ? '<p>' + icon('map') + '<span>' + esc(location) + '</span></p>' : '') + '</div>' +
+    (pending ? '<p class="muted">' + (pending.error ? 'Cambio sin enviar' : 'Pendiente de envío') + '</p>' : '') +
+    '<a class="button ' + (featured ? 'primary' : 'quiet') + ' event-action" href="#/calendario/' + esc(event.id) +
+    '">Ver convocatoria' + icon(featured ? 'arrow' : 'right') + '</a></article>';
 }

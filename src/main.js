@@ -247,19 +247,23 @@ async function signIn(requesting, input) {
 
 function home(data) {
   const next = data.events.find(event => !event.cancelled && Date.parse(event.starts) > Date.now());
-  const unread = data.notices.filter(item => !item.read_at).length;
+  const unread = data.notices.filter(item => !item.read_at);
+  const memberPart = instrument(data.member);
   const personal = data.works.flatMap(work => work.scores.filter(file => matchesScore(file, data.member))
     .map(file => ({ work, file }))).slice(0,3);
-  return header('Tu banda, al día.', '', '<a class="avatar" href="#/perfil" aria-label="Mi perfil">' + initials(data.member.name) + '</a>', fullDate(new Date())) +
-    (unread ? '<a class="callout banner" href="#/avisos">' + icon('avisos') + '<span><strong>' +
-      (unread === 1 ? 'Tienes un aviso por leer' : 'Tienes ' + unread + ' avisos por leer') +
-      '</strong><span>Consulta las novedades de la banda.</span></span>' + icon('right') + '</a>' : '') +
-    '<div class="home-grid"><section>' + sectionTitle('Próximo evento', link('Calendario','#/calendario')) +
-    (next ? eventCard(next, state.pending[next.id]) : empty('No hay próximas convocatorias.')) +
-    '</section><section>' + sectionTitle('Para tu instrumento', link('Ver todas','#/repertorio')) +
+  return '<div class="home-view">' + header('Tu banda, al día', '', '', fullDate(new Date())) +
+    '<div class="home-grid"><section>' + sectionTitle('Próximo evento', link('Calendario','#/calendario'), 'calendario') +
+    (next ? eventCard(next, state.pending[next.id], { featured:true }) : empty('No hay próximas convocatorias.')) +
+    '</section><div class="home-sections">' +
+    (unread.length ? '<section>' + sectionTitle('Avisos', link('Ver todos','#/avisos'), 'bell') +
+      '<p class="home-section-note">' + pill(unread.length + (unread.length === 1 ? ' pendiente' : ' pendientes'), 'accent') + '</p>' +
+      '<div class="row-list">' + unread.slice(0,2).map(notice =>
+        row(notice.title, displayTime(notice.created_at), '#/avisos/' + notice.id, 'bell')).join('') + '</div></section>' : '') +
+    '<section>' + sectionTitle('Para tu instrumento', link('Repertorio','#/repertorio'), 'repertorio') +
+    (memberPart ? '<p class="home-section-note muted">' + memberPart + '</p>' : '') +
     (personal.length ? '<div class="row-list">' + personal.map(({ work, file }) =>
-      row(work.title, [file.instrument, file.voice, 'PDF'].filter(Boolean).join(' · '), '#/repertorio/' + work.id, 'repertorio')).join('') +
-    '</div>' : empty('Aún no hay partituras para tu instrumento y voz.')) + '</section></div>';
+      row(work.title, [file.instrument, file.voice, 'PDF'].filter(Boolean).join(' · '), '#/repertorio/' + work.id, 'file')).join('') +
+    '</div>' : empty('Aún no hay partituras para tu instrumento y voz.')) + '</section></div></div></div>';
 }
 
 let noticeFilter = 'all';
@@ -278,6 +282,7 @@ function bindNotices(content, id) {
       await api('/notices/' + id + '/read', 'PUT', {});
       await refresh();
       bindNotices(content,id);
+      updateNoticeCount();
       toast('Lectura confirmada');
     });
     return;
@@ -359,6 +364,15 @@ function updateConnectionBanner() {
   slot.querySelector('#reconnect')?.addEventListener('click', bootstrap);
 }
 
+function updateNoticeCount() {
+  const badge = shell.querySelector('.nav-count');
+  if (!badge) return;
+  const count = state.data.notices.filter(notice => !notice.read_at).length;
+  badge.hidden = !count;
+  badge.textContent = count > 99 ? '99+' : count;
+  badge.closest('a').setAttribute('aria-label', count ? 'Avisos, ' + count + ' sin leer' : 'Avisos');
+}
+
 async function render() {
   const token = ++rendering;
   const [rawRoute, id, action] = location.hash.replace(/^#\/?/,'').split('/');
@@ -369,17 +383,22 @@ async function render() {
   }
   const active = route === 'gestion' ? 'perfil' : route;
   const nav = destinations.map(([key,label]) => '<a href="#/' + key + '" ' +
-    (active === key ? 'aria-current="page"' : '') + '>' + icon(key) + '<span>' + label + '</span></a>').join('');
+    (active === key ? 'aria-current="page"' : '') + '><span class="nav-glyph">' + icon(key === 'avisos' ? 'bell' : key) +
+    (key === 'avisos' ? '<span class="nav-count" aria-hidden="true" hidden></span>' : '') +
+    '</span><span>' + label + '</span></a>').join('');
+  const brand = '<a class="brand" href="#/inicio"><img src="./public/escudo.png" width="32" height="32" alt="">Calvario</a>';
   shell.innerHTML = '<a class="skip" href="#content">Saltar al contenido</a><div class="layout"><aside class="rail">' +
-    '<a class="brand" href="#/inicio">CALVARIO</a><nav aria-label="Navegación principal">' + nav +
+    brand + '<nav aria-label="Navegación principal">' + nav +
     (!state.offline && state.member.role !== 'musician' ? '<a href="#/gestion"' + (route === 'gestion' ? ' aria-current="page"' : '') +
     '>' + icon('gestion') + '<span>Gestión</span></a>' : '') +
     '</nav><span class="rail-footer">Banda de Cornetas y Tambores</span></aside><div class="main-area">' +
-    '<div class="mobile-brand"><a class="brand" href="#/inicio">Calvario</a></div><main id="content" tabindex="-1">' +
+    '<div class="mobile-brand">' + brand + '<a class="avatar" href="#/perfil" aria-label="Mi perfil">' +
+    initials(state.member.name) + '</a></div><main id="content" tabindex="-1">' +
     '<div id="connection"></div><div id="view"></div></main></div></div>';
   const skip = shell.querySelector('.skip');
   skip.addEventListener('click', event => { event.preventDefault(); shell.querySelector('main').focus(); });
   updateConnectionBanner();
+  updateNoticeCount();
   const content = shell.querySelector('#view');
   try {
     if (route === 'inicio') content.innerHTML = home(state.data);

@@ -1,4 +1,4 @@
-import { area, back, bindForm, button, dateOnly, dayKey, empty, errorRegion, esc, eventCard, field, fullDate, header, icon,
+import { area, attendanceBadge, back, bindForm, button, dateOnly, dayKey, empty, errorRegion, esc, eventCard, field, fullDate, header, icon,
   instrument, intention, link, normalize, options, otherIntention, pill, presence, row, sectionTitle, segment, timeRange } from './ui.js';
 
 const today = () => dayKey(new Date());
@@ -21,9 +21,12 @@ export function calendar(content, ctx, focus) {
   const monthLabel = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(startDay);
   const days = new Date(Date.UTC(year,month,0)).getUTCDate();
   const blanks = (startDay.getUTCDay() + 6) % 7;
+  const previousDays = new Date(Date.UTC(year,month - 1,0)).getUTCDate();
+  const trailing = (7 - (days + blanks) % 7) % 7;
+  const inactiveDay = value => '<span class="inactive-day" aria-hidden="true">' + value + '</span>';
   const calendarGrid = mode === 'month' ? '<div class="month-grid">' +
     ['L','M','X','J','V','S','D'].map(label => '<span class="weekday" aria-hidden="true">' + label + '</span>').join('') +
-    '<span aria-hidden="true"></span>'.repeat(blanks) +
+    Array.from({length:blanks}, (_, i) => inactiveDay(previousDays - blanks + i + 1)).join('') +
     Array.from({length:days}, (_, i) => {
       const key = selected.slice(0,8) + String(i + 1).padStart(2,'0');
       const count = byDay.get(key)?.length ?? 0;
@@ -31,22 +34,26 @@ export function calendar(content, ctx, focus) {
         (count ? ', ' + count + ' evento' + (count === 1 ? '' : 's') : '') + '" aria-pressed="' + (key === selected) + '"' +
         (key === today() ? ' aria-current="date"' : '') + '><span>' + (i + 1) + '</span>' +
         (count ? '<i aria-hidden="true"></i>' : '') + '</button>';
-    }).join('') + '</div>' : '';
+    }).join('') + Array.from({length:trailing}, (_, i) => inactiveDay(i + 1)).join('') + '</div>' : '';
   const upcoming = visible.filter(event => Date.parse(event.starts) > Date.now() && !event.cancelled);
   const past = visible.filter(event => !upcoming.includes(event)).reverse();
   const cards = list => list.map(event => eventCard(event, state.pending[event.id])).join('');
-  const schedule = mode === 'month' ? sectionTitle(dateOnly(selected)) +
-    (byDay.has(selected) ? cards(byDay.get(selected)) : empty('No hay eventos este día.')) :
-    (visible.length ? (upcoming.length ? sectionTitle('Próximos') + cards(upcoming) : '') +
-    (past.length ? sectionTitle('Pasados y cancelados') + cards(past) : '') : empty('No hay eventos este mes.'));
-  content.innerHTML = header('Calendario','Todos los eventos de la banda',
+  const daily = byDay.get(selected) ?? [];
+  const schedule = mode === 'month' ? sectionTitle(dateOnly(selected),
+    daily.length ? pill(daily.length + (daily.length === 1 ? ' evento' : ' eventos')) : '', 'calendario') +
+    (daily.length ? cards(daily) : empty('No hay eventos este día.')) :
+    (visible.length ? (upcoming.length ? '<div class="schedule-group">' + sectionTitle('Próximos') + cards(upcoming) + '</div>' : '') +
+    (past.length ? '<div class="schedule-group">' + sectionTitle('Pasados y cancelados') + cards(past) + '</div>' : '') :
+      empty('No hay eventos este mes.'));
+  content.innerHTML = '<div class="calendar-view">' + header('Calendario','',
     manager(state) ? '<a class="button primary" href="#/calendario/nuevo">' + icon('plus') + 'Nuevo evento</a>' : '') +
-    segment('Vista de calendario',[['month','Mes'],['list','Lista']],mode) +
-    '<div class="calendar-layout"><section class="card calendar-card"><div class="calendar-head"><h2>' + monthLabel[0].toUpperCase() + monthLabel.slice(1) +
-    '</h2><div class="month-controls"><button type="button" id="previous" aria-label="Mes anterior">' + icon('left') +
-    '</button><button type="button" id="next" aria-label="Mes siguiente">' + icon('right') + '</button></div></div>' +
-    calendarGrid + '<button type="button" id="today" class="text-link">Hoy</button></section>' +
-    '<section class="schedule">' + schedule + '</section></div>';
+    segment('Vista de calendario',[['month','Mes','calendario'],['list','Lista','list']],mode) +
+    '<div class="calendar-layout' + (mode === 'list' ? ' calendar-list' : '') + '"><section class="card calendar-card">' +
+    '<div class="calendar-head"><div class="month-controls"><button type="button" id="previous" aria-label="Mes anterior">' + icon('left') +
+    '</button><h2 aria-live="polite">' + monthLabel[0].toUpperCase() + monthLabel.slice(1) +
+    '</h2><button type="button" id="next" aria-label="Mes siguiente">' + icon('right') + '</button></div>' +
+    '<button type="button" id="today" class="button quiet">Hoy</button></div>' + calendarGrid + '</section>' +
+    '<section class="schedule">' + schedule + '</section></div></div>';
   content.querySelector('#previous').onclick = () => { changeMonth(-1); calendar(content,ctx,'#previous'); };
   content.querySelector('#next').onclick = () => { changeMonth(1); calendar(content,ctx,'#next'); };
   content.querySelector('#today').onclick = () => { selected = today(); calendar(content,ctx,'#today'); };
@@ -106,37 +113,38 @@ export async function eventPage(content, ctx, id, action) {
   const places = [event.location,event.town].filter(Boolean).join(' · ');
   const map = [event.meeting || event.location,event.town].filter(Boolean).join(', ');
   const responses = (counts.yes ?? 0) + ' asistirán · ' + (counts.no ?? 0) + ' no asistirán · ' + (counts.unset ?? 0) + ' sin confirmar';
-  content.innerHTML = prev + header(event.title, fullDate(event.starts),
-    manager(state) && !event.cancelled ? link('Editar',href + '/editar') : '', event.type) +
-    '<div class="event-layout"><div class="stack"><section class="card stack">' +
+  content.innerHTML = '<div class="event-view">' + prev + '<div class="event-layout">' +
+    '<section class="card stack event-overview">' + header(event.title, '',
+      manager(state) && !event.cancelled ? link('Editar',href + '/editar') : '', event.type) +
     (event.cancelled ? '<div class="callout"><strong>Evento cancelado</strong><p>La convocatoria se conserva en el historial.</p></div>' : '') +
-    '<div class="info-line">' + icon('clock') + '<div><strong>' + timeRange(event) +
-    '</strong><p class="muted">Fin aproximado · Hora de Madrid</p></div></div>' +
-    (places || event.meeting ? '<div class="info-line">' + icon('map') + '<div><strong>' + esc(places || event.meeting) + '</strong>' +
+    '<div class="info-line"><span class="tile">' + icon('calendario') + '</span><div><strong>' + fullDate(event.starts) +
+    '</strong><p class="muted">' + timeRange(event) + ' · Hora de Madrid · Fin aproximado</p></div></div>' +
+    (places || event.meeting ? '<div class="info-line"><span class="tile">' + icon('map') + '</span><div><strong>' + esc(places || event.meeting) + '</strong>' +
       (event.meeting && places ? '<p class="muted">Punto de encuentro · ' + esc(event.meeting) + '</p>' : '') +
-      '<a class="text-link" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/search/?api=1&amp;query=' +
-      encodeURIComponent(map) + '">Abrir en mapas</a></div></div>' : '') +
-    (event.description ? '<p class="pre">' + esc(event.description) + '</p>' : '') +
-    '</section>' + (detail ? '<section class="card stack"><h2>Información y documentos</h2>' +
-      (detail.attachments.length ? '<div class="row-list">' + detail.attachments.map(file => row(file.name,'PDF','/api/files/' + file.id,'file')).join('') + '</div>' :
-        '<p class="muted">Sin documentos adjuntos.</p>') +
-      '<div><a class="text-link" href="/api/events/' + id + '/calendar">Exportar al calendario (.ics)</a>' +
-      '<p class="muted">La exportación crea una copia. Consulta aquí los cambios posteriores.</p></div></section>' : '') +
-    '</div><div class="stack"><section class="card stack"><h2>Mi asistencia</h2><div>' +
-    pill(intention[event.intention], event.intention === 'yes' ? 'good' : '') +
+      '</div></div>' : '') +
+    (event.description ? '<p class="event-description pre">' + esc(event.description) + '</p>' : '') +
+    (map ? '<a class="button quiet event-action" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/search/?api=1&amp;query=' +
+      encodeURIComponent(map) + '">' + icon('map') + 'Abrir en mapas</a>' : '') +
+    '</section><div class="stack event-side"><section class="card stack event-attendance"><div class="event-labels"><h2>' + icon('check') + 'Mi asistencia</h2>' +
+    attendanceBadge(event.intention) + '</div>' +
     (pending ? '<div class="callout queue"><strong>' + (pending.error ? 'Cambio sin enviar' : 'Pendiente de envío') +
       '</strong><p>Tu selección local: ' + intention[pending.value] + '</p>' +
       (pending.error ? '<p>' + esc(pending.error) + '</p>' : '') +
       button('Retirar cambio local','secondary','id="discard"') + '</div>' : '') +
     (event.reason ? '<p class="muted pre">Motivo privado: ' + esc(event.reason) + '</p>' : '') +
-    '</div>' + (open ? '<p class="muted">Puedes responder hasta el inicio del evento.</p><a class="button primary" href="' +
-      href + '/responder">Responder asistencia</a>' : '<p class="muted">Las respuestas están cerradas para este evento.</p>') +
-    '</section>' + (detail ? '<div class="row-list">' +
+    '<p class="event-description muted">' + icon('clock') + (open ? 'Puedes responder hasta el inicio del evento.' :
+      'Las respuestas están cerradas para este evento.') + '</p>' +
+    (open ? '<a class="button primary event-action" href="' + href + '/responder">Responder asistencia' + icon('arrow') + '</a>' : '') +
+    '</section>' + (detail ? '<div class="row-list event-links">' +
     row('Asistentes',responses,href + '/asistentes','users') +
     (state.member.role === 'director' && !event.cancelled && !open ? row('Pasar lista','Registrar presencia real',href + '/pasar-lista','check') : '') +
     (state.member.role === 'director' ? row('Corregir intención','Revisar respuestas y motivos',href + '/corregir','perfil') : '') +
     (state.member.role === 'admin' ? row('Formación','Editar posiciones y plantillas',href + '/formacion','grid') : '') +
-    '</div>' : '') + '</div></div>';
+    '</div>' : '') + '</div>' + (detail ? '<section class="card stack event-documents"><h2>' + icon('file') + 'Información y documentos</h2>' +
+    (detail.attachments.length ? '<div class="row-list">' + detail.attachments.map(file => row(file.name,'PDF','/api/files/' + file.id,'file')).join('') + '</div>' :
+      '<p class="muted">Sin documentos adjuntos.</p>') +
+    '<a class="button quiet event-action" href="/api/events/' + id + '/calendar">' + icon('calendario') + 'Exportar al calendario (.ics)</a>' +
+    '<p class="muted">La exportación crea una copia. Consulta aquí los cambios posteriores.</p></section>' : '') + '</div></div>';
   content.querySelector('#discard')?.addEventListener('click', () => {
     ctx.setPending(id,null);
     ctx.render();

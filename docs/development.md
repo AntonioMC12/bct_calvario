@@ -1,5 +1,11 @@
 # Seguimiento del desarrollo
 
+## 2026-11-24 · Rediseño de Inicio, Calendario y Detalle de evento
+
+- RF09–RF15, RF17–RF24 y RF33–RF40. Las tres vistas siguen las propuestas de Calvario PWA Gestión Banda en Stitch. Inicio destaca la próxima convocatoria y muestra avisos pendientes y partituras acordes al instrumento. Calendario conserva las vistas Mes y Lista. Detalle reúne convocatoria, asistencia, asistentes y documentos.
+- La navegación usa cinco destinos en móvil y una barra lateral en escritorio. Los avisos sin leer se cuentan con los datos de la sesión. Las acciones de administración y dirección conservan sus condiciones de rol, estado del evento y conexión. La interfaz usa recursos locales y actualiza la versión de la caché de la PWA a `v6`.
+- Se verificaron en la demo aislada los tres roles, las vistas del calendario, el guardado de asistencia y su privacidad, la lectura de avisos, la apertura de PDF y la descarga ICS. También se comprobó la recarga sin conexión y la sincronización de una respuesta al volver a conectarse. Pasaron `npm run check` y las 19 pruebas de `npm test`.
+
 ## 2026-11-24 · Piloto alojado
 
 - GitHub Pages sirve la [PWA del piloto](https://antoniomc12.github.io/bct_calvario/) desde `gh-pages`. La compilación publica una lista cerrada de recursos estáticos y configura la URL de Supabase. El manifiesto y el service worker respetan la ruta `/bct_calvario/`.
