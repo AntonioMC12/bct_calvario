@@ -1,5 +1,10 @@
 # Seguimiento del desarrollo
 
+## 2026-11-24 · Selector de tema
+
+- RF37–RF40. Perfil permite elegir tema Claro, Oscuro o Sistema. La preferencia se guarda en el navegador y se aplica antes de cargar los estilos. El modo Sistema sigue los cambios del dispositivo y la caché de la PWA pasa a `v8`.
+- Se comprobaron los tres modos, la persistencia, la sincronización entre pestañas y el cambio sin conexión. Pasaron `npm run check` y las 21 pruebas de `npm test`.
+
 ## 2026-11-24 · Rediseño de las pantallas restantes
 
 - RF01–RF08 y RF41. Acceso, solicitud, verificación, recuperación y estado de la cuenta usan el diseño de Calvario. Perfil reúne historial, descargas, ajustes y herramientas del rol. El directorio interno permite buscar componentes y las solicitudes conservan la verificación previa a la aprobación.

@@ -1,11 +1,11 @@
 const app = new URL(self.registration.scope);
 const cachePrefix = 'calvario-shell-' + app.pathname + ':';
-const SHELL = cachePrefix + 'v7';
+const SHELL = cachePrefix + 'v8';
 const pushCache = 'calvario-device-push' + (app.pathname === '/' ? '' : app.pathname);
 const pushBinding = new URL('_calvario-push-binding',app).href;
 const assets = ['/', '/manifest.webmanifest', '/public/escudo.png', '/public/icon-192.png', '/public/icon-512.png',
   '/public/inter.woff2', '/public/cinzel.woff2',
-  '/src/main.js', '/src/ui.js', '/src/time.js', '/src/storage.js', '/src/styles.css',
+  '/src/main.js', '/src/ui.js', '/src/time.js', '/src/storage.js', '/src/styles.css', '/src/theme.js',
   '/src/events.js', '/src/repertoire.js', '/src/management.js', '/src/access.js', '/src/report.js',
   '/src/google.js', '/src/push.js', '/public/google-g.png', '/src/connection.js', '/src/runtime.js']
   .map(path => new URL(path.slice(1),app).href);

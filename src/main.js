@@ -1,5 +1,5 @@
 import { back, bindForm, button, displayTime, empty, errorRegion, esc, eventCard, field, fullDate, header, icon,
-  initials, instrument, intention, link, matchesScore, pill, presence, role, row, sectionTitle, segment } from './ui.js';
+  initials, instrument, intention, link, matchesScore, options, pill, presence, role, row, sectionTitle, segment } from './ui.js';
 import { cacheDashboard, clearLocalSignout, clearPrivate, getLocal, localSignoutPending, markLocalSignout, savePending, savedFiles } from './storage.js';
 import { calendar, eventPage } from './events.js';
 import { repertoire, downloads } from './repertoire.js';
@@ -357,6 +357,10 @@ function profile(content, mode) {
     '<section>' + sectionTitle('Mi actividad','', 'chart') + '<div class="row-list">' + row('Mi historial',activity,'#/perfil/historial','clock') +
     row('Descargas', state.saved.size + (state.saved.size === 1 ? ' partitura guardada' : ' partituras guardadas'),'#/perfil/descargas','file') +
     '</div></section></div><div class="stack"><section>' + sectionTitle('Ajustes y cuenta','', 'perfil') + '<div class="row-list">' +
+    '<div class="row appearance-setting"><div><label for="theme-choice">Tema</label>' +
+    '<p class="muted" id="theme-help">Se guarda en este dispositivo.</p></div>' +
+    '<select id="theme-choice" aria-describedby="theme-help">' + options({ system:'Sistema',light:'Claro',dark:'Oscuro' },
+      document.documentElement.dataset.themePreference ?? 'system') + '</select></div>' +
     (state.pushEnabled ? row('Notificaciones','Avisos en este dispositivo','#/perfil/notificaciones','avisos') : '') +
     (state.google ? row('Acceso con Google',member.google_linked ? 'Cuenta vinculada' : 'Vincular cuenta','#/perfil/google','perfil') : '') +
     '<div class="row actions">' + button('Actualizar datos','quiet','id="retry"') + button('Cerrar sesión','quiet','id="signout"') + '</div></div></section>' +
