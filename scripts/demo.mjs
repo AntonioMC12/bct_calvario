@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { openDatabase, transaction } from '../server/db.mjs';
+import { openData, transaction } from '../server/data.mjs';
 import { digest, hashPassword } from '../server/security.mjs';
 import { notify } from '../server/events.mjs';
 import { madridInstant, localMinute } from '../src/time.js';
@@ -13,10 +13,11 @@ if (supplied && (supplied.length < 12 || supplied.length > 128)) {
 }
 const secret = supplied || randomBytes(12).toString('base64url');
 const password = await hashPassword(secret);
-const db = openDatabase(filename);
+const db = await openData(filename,{ demo:true });
 
-function seed() {
-  if (db.prepare('SELECT count(*) AS total FROM members').get().total) return false;
+async function seed() {
+  const { total } = await db.prepare('SELECT count(*) AS total FROM members').get();
+  if (total) return false;
   const time = new Date().toISOString();
   const members = [
     ['musico@demo.invalid','Antonio Muñoz','Corneta','Primera','musician','active'],
@@ -29,7 +30,7 @@ function seed() {
     INSERT INTO members(id,email,password,name,instrument,voice,role,status,created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   for (const [email,name,instrument,voice,role,status] of members) {
-    createMember.run(randomUUID(),email,password,name,instrument,voice,role,status,time);
+    await createMember.run(randomUUID(),email,password,name,instrument,voice,role,status,time);
   }
   const createEvent = db.prepare(`
     INSERT INTO events(id,title,type,starts,ends,location,town,meeting,description)
@@ -44,29 +45,29 @@ function seed() {
   for (const [days,title,type,location,description] of schedule) {
     const day = localMinute(Date.now() + days * 86400000).slice(0,10);
     const id = randomUUID();
-    createEvent.run(id,title,type,madridInstant(day + 'T20:00'),madridInstant(day + 'T22:00'),location,'Doña Mencía','',description);
-    if (days === 1) notify(db,'Próximo ensayo','Consulta la convocatoria del próximo ensayo general.',id);
+    await createEvent.run(id,title,type,madridInstant(day + 'T20:00'),madridInstant(day + 'T22:00'),location,'Doña Mencía','',description);
+    if (days === 1) await notify(db,'Próximo ensayo','Consulta la convocatoria del próximo ensayo general.',id);
   }
-  notify(db,'Partituras disponibles','Hay nuevas partituras de ejemplo en el repertorio.');
+  await notify(db,'Partituras disponibles','Hay nuevas partituras de ejemplo en el repertorio.');
   const workId = randomUUID();
   const score = samplePdf();
-  db.prepare('INSERT INTO works VALUES (?, ?, ?, ?)').run(workId,'Luz de Calvario','A. Romero','Marcha');
-  db.prepare('INSERT INTO files VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 1)')
+  await db.prepare('INSERT INTO works VALUES (?, ?, ?, ?)').run(workId,'Luz de Calvario','A. Romero','Marcha');
+  await db.prepare('INSERT INTO files VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 1)')
     .run(randomUUID(),workId,'luz-de-calvario.pdf','Corneta','Primera',score,digest(score));
   return true;
 }
 
-const created = transaction(db, seed);
-if (!created && supplied) transaction(db, () => {
-  db.prepare("UPDATE members SET password = ? WHERE email IN ('musico@demo.invalid','administracion@demo.invalid','direccion@demo.invalid')")
+const created = await transaction(db, seed);
+if (!created && supplied) await transaction(db, async () => {
+  await db.prepare("UPDATE members SET password = ? WHERE email IN ('musico@demo.invalid','administracion@demo.invalid','direccion@demo.invalid')")
     .run(password);
-  db.prepare(`
+  await db.prepare(`
     DELETE FROM sessions WHERE member_id IN (
       SELECT id FROM members WHERE email IN ('musico@demo.invalid','administracion@demo.invalid','direccion@demo.invalid')
     )
   `).run();
 });
-db.close();
+await db.close();
 if (created) {
   console.log('Cuentas de prueba: musico@demo.invalid, administracion@demo.invalid y direccion@demo.invalid');
   if (!supplied) console.log('Contraseña de esta instalación de prueba: ' + secret);
@@ -75,4 +76,4 @@ if (created) {
 } else {
   console.log('Se reutiliza la base de demostración y sus cuentas existentes.');
 }
-start(filename, { demo: true });
+await start(filename, { demo: true });

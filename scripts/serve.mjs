@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { openDatabase } from '../server/db.mjs';
+import { applicationStore, openData } from '../server/data.mjs';
 import { createApi } from '../server/api.mjs';
 import { sendDueReminders } from '../server/events.mjs';
 import { createMail } from '../server/mail.mjs';
@@ -26,7 +26,8 @@ function configuredOrigin(value) {
   throw new Error('CALVARIO_PUBLIC_ORIGIN debe contener solo el origen HTTPS de Calvario.');
 }
 
-export function createAppServer(db, { sendMail = createMail(), accountClock, publicOrigin, google, push } = {}) {
+export function createAppServer(database, { sendMail = createMail(), accountClock, publicOrigin, google, push } = {}) {
+  const db = applicationStore(database);
   const api = createApi(db, { sendMail, accountClock, google, push });
   const external = configuredOrigin(publicOrigin);
   const authDomain = google?.config.authDomain;
@@ -72,7 +73,7 @@ export function createAppServer(db, { sendMail = createMail(), accountClock, pub
   });
 }
 
-export function start(filename, { demo = false } = {}) {
+export async function start(filename, { demo = false } = {}) {
   const port = Number(process.env.PORT ?? 3000);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error('PORT debe ser un entero entre 1 y 65535.');
@@ -84,7 +85,7 @@ export function start(filename, { demo = false } = {}) {
   const sendMail = createMail({ demo });
   const google = configureGoogle();
   const push = demo ? null : configurePush();
-  const db = openDatabase(filename);
+  const db = await openData(filename,{ demo });
   const server = createAppServer(db, { sendMail, publicOrigin, google, push });
   const pushWorker = push && createPushWorker(db,push.deliver);
   const pushTimer = pushWorker && setInterval(() => {
@@ -92,19 +93,16 @@ export function start(filename, { demo = false } = {}) {
   },5000);
   pushTimer?.unref?.();
   const timer = setInterval(() => {
-    try {
-      sendDueReminders(db);
-    } catch (error) {
-      console.error('No se pudieron procesar los recordatorios', error);
-    }
+    sendDueReminders(db).catch(() => console.error('No se pudieron procesar los recordatorios.'));
   }, 30000);
   timer.unref();
   server.on('close', () => {
     clearInterval(timer);
     clearInterval(pushTimer);
-    db.close();
+    db.close().catch(() => console.error('No se pudo cerrar la base de datos.'));
   });
-  return server.listen(port, '127.0.0.1', () => console.log('Calvario · http://localhost:' + port));
+  const database = db.dialect === 'postgres' ? 'Supabase PostgreSQL' : 'SQLite';
+  return server.listen(port, '127.0.0.1', () => console.log('Calvario · http://localhost:' + port + ' · ' + database));
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) start();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await start();

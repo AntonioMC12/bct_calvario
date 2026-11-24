@@ -1,5 +1,13 @@
 # Seguimiento del desarrollo
 
+## 2026-11-24 · Base de datos Supabase v0.5
+
+- Se añadió PostgreSQL como opción del servidor y se conserva SQLite para desarrollo y demo. `pg` conecta al esquema privado `calvario` mediante TLS con certificado verificado. La API de Calvario conserva la autorización y Firebase sigue identificando a quienes usan Google.
+- Las escrituras relacionadas se agrupan en transacciones. PostgreSQL usa un bloqueo de transacción para coordinar escrituras como cambios de asistencia y asignación de trabajos push. La demo sigue usando las transacciones SQLite.
+- `db:setup` prepara el esquema, `db:check` prueba la conexión y `db:import` importa una copia SQLite de esquema 3 a un destino vacío. Verifica relaciones, recuentos y huellas de los PDF. Las sesiones, enlaces de uso único, suscripciones y envíos pendientes no migran.
+- Las pruebas PostgreSQL usan PGlite como dependencia de desarrollo y pasan por el cliente de red `pg`. Cubren los flujos existentes y la recuperación de una cuenta y de su PDF tras importar. Falta ejecutar la comprobación de conexión contra el proyecto real y ensayar su copia y restauración.
+- Los PDF permanecen en la base privada y consumen espacio de PostgreSQL. Moverlos a Supabase Storage requeriría trasladar los binarios y conservar el control de acceso del servidor.
+
 ## 2026-11-24 · Google y Web Push v0.4
 
 - RF01–RF04 y RF41. Firebase Authentication verifica el acceso con Google. SQLite conserva el rol, el estado y el historial. Las cuentas existentes se vinculan solo tras confirmar su contraseña y seleccionar el mismo correo. Las altas nuevas completan su solicitud y pasan por aprobación. Las cuentas de baja no reciben sesión de Google.

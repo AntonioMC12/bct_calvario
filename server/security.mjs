@@ -20,10 +20,10 @@ const cookie = (value, secure) => 'calvario_session=' + value + '; HttpOnly; Sam
   (secure ? '; Secure' : '');
 export const expiredCookie = secure => cookie('',secure) + '; Max-Age=0';
 
-export function startSession(db, memberId, secure = false) {
+export async function startSession(db, memberId, secure = false) {
   const token = randomBytes(32).toString('hex');
-  db.prepare('DELETE FROM sessions WHERE expires <= ?').run(Date.now());
-  db.prepare('INSERT INTO sessions VALUES (?, ?, ?)').run(digest(token), memberId, Date.now() + LIFETIME * 1000);
+  await db.prepare('DELETE FROM sessions WHERE expires <= ?').run(Date.now());
+  await db.prepare('INSERT INTO sessions VALUES (?, ?, ?)').run(digest(token), memberId, Date.now() + LIFETIME * 1000);
   return cookie(token,secure) + '; Max-Age=' + LIFETIME;
 }
 
@@ -32,14 +32,15 @@ export function tokenHash(request) {
   return match ? digest(match[1]) : '';
 }
 
-export function getMember(db, request) {
-  return db.prepare(`
+export async function getMember(db, request) {
+  return await db.prepare(`
     SELECT m.id, email, name, instrument, voice, role, status, email_verified_at, requires_email_verification,
-      password_enabled, EXISTS (SELECT 1 FROM google_identities g WHERE g.member_id = m.id) AS google_linked
+      password_enabled, CASE WHEN EXISTS (SELECT 1 FROM google_identities g WHERE g.member_id = m.id)
+        THEN 1 ELSE 0 END AS google_linked
     FROM sessions s JOIN members m ON m.id = s.member_id WHERE s.token = ? AND s.expires > ?
   `).get(tokenHash(request), Date.now());
 }
 
-export function endSession(db, request) {
-  db.prepare('DELETE FROM sessions WHERE token = ?').run(tokenHash(request));
+export async function endSession(db, request) {
+  await db.prepare('DELETE FROM sessions WHERE token = ?').run(tokenHash(request));
 }

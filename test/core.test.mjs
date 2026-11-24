@@ -1,14 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
-import { openDatabase } from '../server/db.mjs';
+import { testStore } from '../scripts/test-store.mjs';
 import { hashPassword } from '../server/security.mjs';
 import { createAppServer } from '../scripts/serve.mjs';
 import { samplePdf } from '../scripts/sample-pdf.mjs';
 import { localMinute, madridInstant } from '../src/time.js';
 import { sendDueReminders } from '../server/events.mjs';
 
-const db = openDatabase(':memory:');
+const { db,close } = await testStore();
 const mailbox = [];
 let offset = 0;
 const server = createAppServer(db, {
@@ -49,7 +49,7 @@ before(async () => {
   `);
   for (const role of ['admin','director','musician']) {
     ids[role] = randomUUID();
-    insert.run(ids[role],role + '@test.invalid',hash,'Cuenta ' + role,role,new Date().toISOString());
+    await insert.run(ids[role],role + '@test.invalid',hash,'Cuenta ' + role,role,new Date().toISOString());
   }
   await new Promise(resolve => server.listen(0,'127.0.0.1',resolve));
   base = 'http://127.0.0.1:' + server.address().port;
@@ -65,7 +65,7 @@ before(async () => {
 
 after(async () => {
   await new Promise(resolve => server.close(resolve));
-  db.close();
+  await close();
 });
 
 test('alta pendiente, aprobación y bloqueo de contactos', async () => {
@@ -94,7 +94,7 @@ test('recuperación neutral, caducidad, concurrencia y revocación de sesiones',
   assert.ok(!mailbox.some(item => item.to === 'desconocido@test.invalid'));
   assert.equal((await anonymous('/account/forgot','POST',{ email:address })).status,202);
   const oldToken = takeToken(address,'restablecer');
-  assert.equal(db.prepare('SELECT digest FROM account_tokens WHERE digest = ?').get(oldToken),undefined);
+  assert.equal(await db.prepare('SELECT digest FROM account_tokens WHERE digest = ?').get(oldToken),undefined);
   offset += 31 * 60000;
   const replacement = 'Nuevo-acceso-prueba-01';
   assert.equal((await anonymous('/account/reset','POST',{ token:oldToken, password:replacement })).status,422);
@@ -174,7 +174,7 @@ test('cambio de horario, cancelación, recordatorio y confirmación individual d
   const cancelled = await director(path + '/cancel','POST',{ version:edited.data.version });
   assert.equal(cancelled.status,200);
   assert.equal(cancelled.data.cancelled,1);
-  sendDueReminders(db,new Date(Date.parse(event.starts) - 60000).toISOString());
+  await sendDueReminders(db,new Date(Date.parse(event.starts) - 60000).toISOString());
   assert.equal((await musician(path + '/intention','PUT',{ value:'no',version:2 })).data.code,'closed');
   const notices = async send => (await send('/dashboard')).data.notices.filter(notice => notice.event_id === event.id);
   const inbox = await notices(musician);
@@ -200,11 +200,11 @@ test('el recordatorio se recalcula y se emite una sola vez', async () => {
   assert.equal(shifted.status,200);
   const reminders = async () => (await musician('/dashboard')).data.notices.filter(
     notice => notice.event_id === created.id && notice.title === 'Recordatorio de evento');
-  sendDueReminders(db,new Date(originalTime - 1800000).toISOString());
+  await sendDueReminders(db,new Date(originalTime - 1800000).toISOString());
   assert.equal((await reminders()).length,0);
   const eligible = new Date(Date.parse(shifted.data.starts) - 3600000).toISOString();
-  sendDueReminders(db,eligible);
-  sendDueReminders(db,eligible);
+  await sendDueReminders(db,eligible);
+  await sendDueReminders(db,eligible);
   assert.equal((await reminders()).length,1);
 });
 
@@ -236,7 +236,7 @@ test('PDF privado, duplicados, validación por dirección y baja', async () => {
   assert.equal((await admin(file + '/approve','PUT',{})).status,403);
   assert.equal((await director(file + '/approve','PUT',{})).status,200);
   assert.equal((await musician(file)).type,'application/pdf');
-  db.prepare("UPDATE members SET status = 'inactive' WHERE id = ?").run(ids.musician);
+  await db.prepare("UPDATE members SET status = 'inactive' WHERE id = ?").run(ids.musician);
   assert.equal((await musician(file)).status,403);
   assert.equal((await musician('/dashboard')).status,403);
 });

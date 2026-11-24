@@ -1,6 +1,6 @@
 # Calvario
 
-PWA para la Banda de Cornetas y Tambores Santísimo Cristo del Calvario. La versión 0.4 incorpora acceso con Google y Web Push configurables, además de la recuperación de contraseña, asistencia, avisos, formaciones y partituras privadas.
+PWA para la Banda de Cornetas y Tambores Santísimo Cristo del Calvario. La versión 0.5 admite PostgreSQL en Supabase y conserva la demo SQLite. El núcleo incluye acceso con Google y Web Push configurables, recuperación de contraseña, asistencia, avisos, formaciones y partituras privadas.
 
 ## Probar con datos ficticios
 
@@ -38,6 +38,26 @@ npm run account -- provision direccion@ejemplo.invalid director "Dirección"
 
 El resto de músicos puede solicitar acceso desde la propia aplicación. Las altas nuevas confirman su correo antes de que administración o dirección las aprueben. La retirada operativa de una membresía de músico en desarrollo se hace con `npm run account -- deactivate músico@ejemplo.invalid`. Conserva sus registros e invalida sus sesiones.
 
+## Conectar Supabase
+
+1. Crea un proyecto de pruebas. En **Connect**, copia la cadena **Session pooler** del puerto 5432. También se admite la conexión directa si tu red tiene IPv6. Sustituye el marcador de contraseña y aplica codificación URL si contiene caracteres reservados.
+2. Descarga el certificado desde **Database → Settings → SSL Configuration**. Define `CALVARIO_DATABASE_URL` y `CALVARIO_DATABASE_CA` en `.env`. Solo Node.js usa ese archivo. El servidor verifica el certificado y el nombre del servidor de Supabase.
+3. Ejecuta `npm run db:setup` y `npm run db:check`. Las tablas se crean en el esquema privado `calvario`. Mantén ese esquema fuera de la lista de esquemas expuestos por la Data API.
+4. Si partes de cero, crea una cuenta de gestión con `npm run account` como se indica arriba. Si quieres conservar datos, importa primero la copia SQLite.
+5. Arranca con `npm start`. La consola debe indicar **Supabase PostgreSQL**. `npm run demo` sigue usando SQLite y sus cuentas ficticias.
+
+Firebase sigue verificando el acceso con Google. Node.js aplica los permisos, sirve los PDF privados y envía Web Push. Los PDF permanecen en PostgreSQL y cuentan para la cuota de la base de datos. Supabase Storage sería una migración aparte.
+
+### Migrar una base SQLite existente
+
+Detén la instancia que escribe en SQLite durante el cambio o utiliza una copia coherente del archivo de esquema 3. Prepara primero un destino vacío con `npm run db:setup`, y luego ejecuta:
+
+```sh
+npm run db:import -- data/copias/antes-supabase.sqlite
+```
+
+La importación conserva las cuentas, las vinculaciones con Google, el historial, los avisos y los PDF. Comprueba las relaciones, verifica las huellas de los PDF y cancela la operación si hay un error o el destino contiene datos. Las sesiones, enlaces temporales y suscripciones push se vuelven a crear desde la app. Guarda la copia de origen hasta verificar el piloto.
+
 ## Confirmar un correo o recuperar la contraseña
 
 En la demo, busca el mensaje para tu dirección en `data/demo-mailbox/` y abre el enlace en el navegador. Si arrancas con `npm start` sin SMTP, el buzón es `data/mailbox/`. Puedes cambiarlo mediante `CALVARIO_MAILBOX`. Los archivos del buzón contienen enlaces temporales de acceso y deben quedarse en el entorno local.
@@ -72,10 +92,13 @@ El navegador puede ofrecer instalación como PWA. La disponibilidad depende del 
 ```sh
 npm run check
 npm test
+npm run test:postgres
 npm run backup -- data/copias/calvario.sqlite
 ```
 
-Las pruebas cubren migraciones, permisos, alta, recuperación, validaciones, asistencia, avisos, formaciones y PDF. El comando de copia guarda datos y documentos en un archivo nuevo y comprueba su integridad. Las sesiones y los enlaces de acceso no se restauran. Para ensayar la restauración, arranca una instancia aislada con una **copia** del archivo en `CALVARIO_DB` y otro `PORT`.
+Las pruebas cubren migraciones, permisos, alta, recuperación, validaciones, asistencia, avisos, formaciones y PDF. `npm run test:postgres` vuelve a ejecutar los flujos principales contra PostgreSQL local por el protocolo de red, sin conectarse a Supabase.
+
+El comando `npm run backup` respalda SQLite y comprueba su integridad. Para ensayar su restauración, arranca una instancia aislada con una **copia** del archivo en `CALVARIO_DB` y otro `PORT`. Para Supabase, usa `pg_dump` con el esquema `calvario` y excluye los datos de `sessions`, `account_tokens`, `push_subscriptions` y `push_jobs`.
 
 ## Código y seguimiento
 

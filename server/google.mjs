@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { applicationDefault, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { transaction } from './db.mjs';
+import { transaction } from './data.mjs';
 import { audit } from './events.mjs';
 import { choice, requireThat, text } from './http.mjs';
 import { checkPassword, getMember, startSession, tokenHash } from './security.mjs';
@@ -36,8 +36,8 @@ function verifiedIdentity(claims) {
   return { email, uid:claims.uid, subject:subject[0] };
 }
 
-function linkedAccount(db, identity) {
-  const rows = db.prepare(`
+async function linkedAccount(db, identity) {
+  const rows = await db.prepare(`
     SELECT g.google_subject, g.firebase_uid, m.id, m.status
     FROM google_identities g JOIN members m ON m.id = g.member_id
     WHERE g.google_subject = ? OR g.firebase_uid = ?
@@ -48,9 +48,9 @@ function linkedAccount(db, identity) {
   return rows[0];
 }
 
-function recordIdentity(db, identity, id) {
-  db.prepare('INSERT INTO google_identities VALUES (?, ?, ?)').run(identity.subject,identity.uid,id);
-  audit(db,id,'access.link_google',id);
+async function recordIdentity(db, identity, id) {
+  await db.prepare('INSERT INTO google_identities VALUES (?, ?, ?)').run(identity.subject,identity.uid,id);
+  await audit(db,id,'access.link_google',id);
 }
 
 export async function authenticateWithGoogle(db, provider, request, input, secure) {
@@ -59,16 +59,18 @@ export async function authenticateWithGoogle(db, provider, request, input, secur
   const idToken = text(input.idToken,8192,'Credencial de Firebase',true);
   let actor, matchedPassword, session;
   if (mode === 'link') {
-    actor = getMember(db,request);
+    actor = await getMember(db,request);
     requireThat(actor?.status === 'active' && actor.password_enabled, 403, 'Inicia sesión con tu cuenta de Calvario.');
     requireThat(request.headers['x-calvario-account'] === actor.id, 409, 'La cuenta activa ha cambiado.');
     requireThat(typeof input.password === 'string' && input.password.length > 0 && input.password.length <= 128, 422,
       'Confirma tu contraseña de Calvario.');
-    matchedPassword = db.prepare('SELECT password FROM members WHERE id = ?').get(actor.id).password;
+    const credentials = await db.prepare('SELECT password FROM members WHERE id = ?').get(actor.id);
+    matchedPassword = credentials?.password;
+    requireThat(matchedPassword,403,'Tu sesión ha cambiado.');
     requireThat(await checkPassword(input.password,matchedPassword),401,'La contraseña de Calvario es incorrecta.');
     session = tokenHash(request);
   } else {
-    requireThat(!getMember(db,request),409,'Cierra tu sesión antes de entrar con Google.');
+    requireThat(!await getMember(db,request),409,'Cierra tu sesión antes de entrar con Google.');
   }
   let decoded;
   try {
@@ -77,10 +79,10 @@ export async function authenticateWithGoogle(db, provider, request, input, secur
     requireThat(false,401,'No se pudo verificar el acceso con Google. Vuelve a intentarlo.');
   }
   const identity = verifiedIdentity(decoded);
-  return transaction(db, () => {
-    const linked = linkedAccount(db,identity);
+  return transaction(db, async () => {
+    const linked = await linkedAccount(db,identity);
     if (mode === 'link') {
-      const current = db.prepare(`
+      const current = await db.prepare(`
         SELECT m.id, email, password FROM sessions s JOIN members m ON m.id = s.member_id
         WHERE s.token = ? AND s.expires > ? AND m.status = 'active' AND m.password_enabled = 1
       `).get(session,Date.now());
@@ -88,18 +90,18 @@ export async function authenticateWithGoogle(db, provider, request, input, secur
       requireThat(current.email === identity.email,409,'El correo de Google debe coincidir con el de tu cuenta de Calvario.');
       requireThat(!linked || linked.id === actor.id,409,'Esta cuenta de Google ya tiene una vinculación.');
       if (!linked) {
-        requireThat(!db.prepare('SELECT 1 FROM google_identities WHERE member_id = ?').get(actor.id),
+        requireThat(!await db.prepare('SELECT 1 FROM google_identities WHERE member_id = ?').get(actor.id),
           409,'Tu cuenta de Calvario ya está vinculada con otra identidad de Google.');
-        recordIdentity(db,identity,actor.id);
+        await recordIdentity(db,identity,actor.id);
       }
       return { linked:true };
     }
-    requireThat(!getMember(db,request),409,'La sesión ha cambiado. Cierra sesión y vuelve a intentarlo.');
+    requireThat(!await getMember(db,request),409,'La sesión ha cambiado. Cierra sesión y vuelve a intentarlo.');
     if (linked) {
       requireThat(['pending','active'].includes(linked.status),403,'La cuenta de Calvario no tiene acceso.');
-      return { cookie:startSession(db,linked.id,secure) };
+      return { cookie:await startSession(db,linked.id,secure) };
     }
-    requireThat(!db.prepare('SELECT 1 FROM members WHERE email = ?').get(identity.email),409,
+    requireThat(!await db.prepare('SELECT 1 FROM members WHERE email = ?').get(identity.email),409,
       'Ya hay una cuenta con ese correo. Entra con tu contraseña y vincula Google desde Perfil.', 'link_required');
     requireThat(mode === 'register',409,'Completa los datos de tu solicitud.', 'profile_required');
     const name = text(input.name,120,'Nombre y apellidos',true);
@@ -107,11 +109,11 @@ export async function authenticateWithGoogle(db, provider, request, input, secur
     const voice = text(input.voice,80,'Voz');
     const id = randomUUID();
     const timestamp = new Date().toISOString();
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO members(id,email,password,name,instrument,voice,created_at,email_verified_at,password_enabled)
       VALUES (?, ?, '', ?, ?, ?, ?, ?, 0)
     `).run(id,identity.email,name,instrument,voice,timestamp,timestamp);
-    recordIdentity(db,identity,id);
-    return { cookie:startSession(db,id,secure) };
+    await recordIdentity(db,identity,id);
+    return { cookie:await startSession(db,id,secure) };
   });
 }

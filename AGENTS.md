@@ -18,7 +18,7 @@ Calvario cuenta con un núcleo de desarrollo local. Lee `README.md` y `docs/deve
 
 ## Verificación y seguimiento
 
-- Ejecuta `npm run check` y `npm test`. Si cambia un flujo, compruébalo también desde su entrada normal en el navegador.
+- Ejecuta `npm run check` y `npm test`. Si cambian el esquema o las consultas, ejecuta también `npm run test:postgres`. Si cambia un flujo, compruébalo desde su entrada normal en el navegador.
 - Añade pruebas de permisos y comportamiento cuando cambien reglas de negocio. Usa datos ficticios y una base aislada.
 - Actualiza `docs/development.md` con el resultado, las comprobaciones y el trabajo pendiente.
 - Antes de un commit, revisa `git diff --check`, el diff y `git status`.

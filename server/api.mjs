@@ -4,7 +4,7 @@ import { checkPassword, endSession, expiredCookie, getMember, hashPassword, star
 import { audit, calendarFile, cancelEvent, eventById, eventDetail, eventList, managers, notify, saveEvent, saveIntention, savePresence, sendDueReminders } from './events.mjs';
 import { catalog, createWork, servePdf, approveScore, uploadPdf } from './music.mjs';
 import { formation, saveFormation, saveTemplate } from './formations.mjs';
-import { transaction } from './db.mjs';
+import { transaction } from './data.mjs';
 import { createAccountMail } from './account-mail.mjs';
 import { authenticateWithGoogle } from './google.mjs';
 import { subscribe, unsubscribe } from './push.mjs';
@@ -35,31 +35,35 @@ function password(value, min) {
   return value;
 }
 
-function review(db, actor, id, input) {
+async function review(db, actor, id, input) {
   const status = choice(input.status, ['active','rejected'], 'Resolución');
-  return transaction(db, () => {
+  return transaction(db, async () => {
     if (status === 'active') {
-      const pending = db.prepare("SELECT requires_email_verification, email_verified_at FROM members WHERE id = ? AND status = 'pending'").get(id);
+      const pending = await db.prepare("SELECT requires_email_verification, email_verified_at FROM members WHERE id = ? AND status = 'pending'").get(id);
       requireThat(!pending?.requires_email_verification || pending.email_verified_at, 409, 'El solicitante aún debe confirmar su correo.');
     }
-    const result = db.prepare(`
+    const result = await db.prepare(`
       UPDATE members SET status = ?, reviewed_at = ?, reviewed_by = ?
       WHERE id = ? AND status = 'pending'
     `).run(status, now(), actor.id, id);
     requireThat(result.changes, 409, 'La solicitud ya no está pendiente.');
-    audit(db, actor.id, 'access.' + status, id);
+    await audit(db, actor.id, 'access.' + status, id);
     return { status };
   });
 }
 
-function dashboard(db, member) {
-  sendDueReminders(db);
-  const notices = db.prepare(`
-    SELECT n.id, n.title, n.message, n.created_at, n.event_id, i.read_at
-    FROM notices n JOIN inbox i ON i.notice_id = n.id
-    WHERE i.member_id = ? ORDER BY n.created_at DESC, n.rowid DESC
-  `).all(member.id);
-  return { member, events: eventList(db, member), notices, works: catalog(db, member), updatedAt: now() };
+async function dashboard(db, member) {
+  await sendDueReminders(db);
+  const [notices,events,works] = await Promise.all([
+    db.prepare(`
+      SELECT n.id, n.title, n.message, n.created_at, n.event_id, i.read_at
+      FROM notices n JOIN inbox i ON i.notice_id = n.id
+      WHERE i.member_id = ? ORDER BY n.created_at DESC, n.id DESC
+    `).all(member.id),
+    eventList(db, member),
+    catalog(db, member),
+  ]);
+  return { member, events, notices, works, updatedAt: now() };
 }
 
 export function createApi(db, { sendMail, accountClock, google, push } = {}) {
@@ -79,7 +83,7 @@ export function createApi(db, { sendMail, accountClock, google, push } = {}) {
 
   async function handle(request, response, pathname, expectedOrigin) {
     const method = request.method;
-    const member = getMember(db, request);
+    const member = await getMember(db, request);
     const secure = expectedOrigin.startsWith('https://');
     if (method !== 'GET') {
       const origin = request.headers.origin;
@@ -93,7 +97,7 @@ export function createApi(db, { sendMail, accountClock, google, push } = {}) {
 
     if (method === 'POST' && pathname === '/api/logout') {
       await body(request);
-      endSession(db, request);
+      await endSession(db, request);
       return json(response, 200, {}, { 'Set-Cookie': expiredCookie(secure) });
     }
 
@@ -107,23 +111,23 @@ export function createApi(db, { sendMail, accountClock, google, push } = {}) {
       const input = await body(request);
       if (pathname === '/api/account/forgot') {
         rateLimit(request, 'technical-mail', 8, 300000);
-        const recipient = db.prepare(`
+        const recipient = await db.prepare(`
           SELECT id, email FROM members WHERE email = ? AND status IN ('active','pending') AND password_enabled = 1
         `).get(email(input.email));
-        if (recipient) accountMail.issue(recipient, 'reset', expectedOrigin);
+        if (recipient) await accountMail.issue(recipient, 'reset', expectedOrigin);
         return json(response, 202, {});
       }
       if (pathname === '/api/account/resend') {
         rateLimit(request, 'technical-mail', 8, 300000);
-        const current = getMember(db, request);
+        const current = await getMember(db, request);
         requireThat(current && current.id === member?.id && current.status === 'pending', 403, 'Inicia sesión con la solicitud pendiente.');
         requireThat(!request.headers['x-calvario-account'] || request.headers['x-calvario-account'] === current.id,
           409, 'La cuenta activa ha cambiado.', 'account_changed');
-        if (!current.email_verified_at) accountMail.issue(current, 'verify', expectedOrigin);
+        if (!current.email_verified_at) await accountMail.issue(current, 'verify', expectedOrigin);
         return json(response, 202, {});
       }
       rateLimit(request, 'account-token', 20, 60000);
-      if (pathname === '/api/account/verify') accountMail.verify(input.token);
+      if (pathname === '/api/account/verify') await accountMail.verify(input.token);
       else await accountMail.reset(input.token, password(input.password, 12));
       return json(response, 200, {});
     }
@@ -142,26 +146,26 @@ export function createApi(db, { sendMail, accountClock, google, push } = {}) {
         const voice = text(input.voice, 80, 'Voz');
         const hash = await hashPassword(secret);
         id = randomUUID();
-        const inserted = db.prepare(`
+        const inserted = await db.prepare(`
           INSERT INTO members(id, email, password, name, instrument, voice, created_at, requires_email_verification)
           VALUES (?, ?, ?, ?, ?, ?, ?, 1) ON CONFLICT(email) DO NOTHING
         `).run(id, address, hash, name, instrument, voice, now());
         requireThat(inserted.changes, 409, 'Ya existe una cuenta con este correo. Prueba a iniciar sesión.');
-        accountMail.issue({ id, email: address }, 'verify', expectedOrigin);
+        await accountMail.issue({ id, email: address }, 'verify', expectedOrigin);
       } else {
-        const match = db.prepare('SELECT id, password FROM members WHERE email = ? AND password_enabled = 1').get(address);
+        const match = await db.prepare('SELECT id, password FROM members WHERE email = ? AND password_enabled = 1').get(address);
         const valid = await checkPassword(secret, match?.password ?? await dummyHash);
         requireThat(valid && match, 401, 'El correo o la contraseña son incorrectos.');
         id = match.id;
         verifiedHash = match.password;
       }
-      const session = transaction(db, () => {
+      const session = await transaction(db, async () => {
         if (!signup) {
-          const current = db.prepare('SELECT password FROM members WHERE id = ?').get(id);
+          const current = await db.prepare('SELECT password FROM members WHERE id = ?').get(id);
           requireThat(current?.password === verifiedHash, 401, 'El correo o la contraseña son incorrectos.');
         }
-        endSession(db, request);
-        return startSession(db, id, secure);
+        await endSession(db, request);
+        return await startSession(db, id, secure);
       });
       return json(response, signup ? 201 : 200, {}, { 'Set-Cookie': session });
     }
@@ -174,34 +178,34 @@ export function createApi(db, { sendMail, accountClock, google, push } = {}) {
     async function inputFor(roles, limit) {
       if (roles) requireThat(roles.includes(member.role), 403, 'Tu perfil no puede realizar esta operación.');
       const input = await body(request, limit);
-      const current = getMember(db, request);
+      const current = await getMember(db, request);
       requireThat(current?.id === member.id && current.status === 'active', 403, 'Tu membresía no está activa.', 'inactive');
       if (roles) requireThat(roles.includes(current.role), 403, 'Tu perfil no puede realizar esta operación.');
       Object.assign(member, current);
       return input;
     }
 
-    if (method === 'GET' && pathname === '/api/dashboard') return json(response, 200, dashboard(db, member));
+    if (method === 'GET' && pathname === '/api/dashboard') return json(response, 200, await dashboard(db, member));
 
     if (pathname === '/api/push') {
       requireThat(push,404,'Los avisos push todavía no están configurados.');
       if (method === 'GET') {
-        const devices = db.prepare('SELECT id FROM push_subscriptions WHERE session_token = ?').all(tokenHash(request));
+        const devices = await db.prepare('SELECT id FROM push_subscriptions WHERE session_token = ?').all(tokenHash(request));
         return json(response,200,{ publicKey:push.publicKey, bindings:devices.map(device => device.id) });
       }
       if (method === 'POST') {
         const input = await inputFor();
-        return json(response,200,subscribe(db,member,tokenHash(request),input));
+        return json(response,200,await subscribe(db,member,tokenHash(request),input));
       }
       if (method === 'DELETE') {
-        unsubscribe(db,tokenHash(request),await inputFor());
+        await unsubscribe(db,tokenHash(request),await inputFor());
         return json(response,200,{});
       }
     }
 
     if (method === 'GET' && pathname === '/api/management') {
       requireThat(managers.includes(member.role), 403, 'Tu perfil no puede consultar los contactos.');
-      const members = db.prepare(`
+      const members = await db.prepare(`
         SELECT id, name, email, instrument, voice, role, status, created_at, email_verified_at, requires_email_verification
         FROM members ORDER BY name
       `).all();
@@ -209,18 +213,18 @@ export function createApi(db, { sendMail, accountClock, google, push } = {}) {
     }
 
     let route = pathname.match(/^\/api\/requests\/([\w-]+)$/);
-    if (route && method === 'PUT') return json(response, 200, review(db, member, route[1], await inputFor(managers)));
+    if (route && method === 'PUT') return json(response, 200, await review(db, member, route[1], await inputFor(managers)));
     if (method === 'POST' && pathname === '/api/events') {
-      return json(response, 201, saveEvent(db, member, await inputFor(managers)));
+      return json(response, 201, await saveEvent(db, member, await inputFor(managers)));
     }
 
     route = pathname.match(/^\/api\/events\/([\w-]+)(?:\/(calendar|cancel|intention|presence|attachments|formation|template)(?:\/([\w-]+))?)?$/);
     if (route) {
       const [, id, action, related] = route;
-      if (!action && method === 'GET') return json(response, 200, eventDetail(db, member, id));
-      if (!action && method === 'PUT') return json(response, 200, saveEvent(db, member, await inputFor(managers), id));
+      if (!action && method === 'GET') return json(response, 200, await eventDetail(db, member, id));
+      if (!action && method === 'PUT') return json(response, 200, await saveEvent(db, member, await inputFor(managers), id));
       if (action === 'calendar' && method === 'GET') {
-        const data = calendarFile(eventById(db, id));
+        const data = calendarFile(await eventById(db, id));
         return response.writeHead(200, {
           'Content-Type': 'text/calendar; charset=utf-8',
           'Content-Disposition': 'attachment; filename=calvario.ics', 'Cache-Control': 'no-store',
@@ -228,57 +232,57 @@ export function createApi(db, { sendMail, accountClock, google, push } = {}) {
       }
       if (action === 'cancel' && method === 'POST') {
         const input = await inputFor(managers);
-        return json(response, 200, cancelEvent(db, member, id, input.version));
+        return json(response, 200, await cancelEvent(db, member, id, input.version));
       }
       if (action === 'intention' && method === 'PUT') {
         const input = await inputFor(related ? directors : null);
-        return json(response, 200, saveIntention(db, member, id, related ?? member.id, input));
+        return json(response, 200, await saveIntention(db, member, id, related ?? member.id, input));
       }
-      if (action === 'presence' && method === 'PUT') return json(response, 200, savePresence(db, member, id, await inputFor(directors, 100000)));
+      if (action === 'presence' && method === 'PUT') return json(response, 200, await savePresence(db, member, id, await inputFor(directors, 100000)));
       if (action === 'attachments' && method === 'POST') {
-        return json(response, 201, uploadPdf(db, member, await inputFor(managers, pdfLimit), { eventId: id }));
+        return json(response, 201, await uploadPdf(db, member, await inputFor(managers, pdfLimit), { eventId: id }));
       }
       if (action === 'formation' && method === 'GET') {
         requireThat(admins.includes(member.role), 403, 'La gestión de formaciones corresponde a administración.');
-        const templates = db.prepare('SELECT * FROM templates ORDER BY name').all();
-        const sources = db.prepare('SELECT e.id, e.title, e.starts FROM formations f JOIN events e ON e.id = f.event_id WHERE e.id <> ? ORDER BY e.starts DESC').all(id);
-        const members = db.prepare(`
+        const templates = await db.prepare('SELECT * FROM templates ORDER BY name').all();
+        const sources = await db.prepare('SELECT e.id, e.title, e.starts FROM formations f JOIN events e ON e.id = f.event_id WHERE e.id <> ? ORDER BY e.starts DESC').all(id);
+        const members = await db.prepare(`
           SELECT m.id, m.name, m.instrument, m.voice, m.status, coalesce(i.value,'unset') AS intention
           FROM members m LEFT JOIN intentions i ON i.member_id = m.id AND i.event_id = ?
           WHERE m.status IN ('active','inactive') ORDER BY m.name
         `).all(id);
-        return json(response, 200, { ...formation(db, id), templates, sources, members });
+        return json(response, 200, { ...await formation(db, id), templates, sources, members });
       }
-      if (action === 'formation' && method === 'PUT') return json(response, 200, saveFormation(db, member, id, await inputFor(admins)));
-      if (action === 'template' && method === 'POST') return json(response, 201, saveTemplate(db, id, await inputFor(admins)));
+      if (action === 'formation' && method === 'PUT') return json(response, 200, await saveFormation(db, member, id, await inputFor(admins)));
+      if (action === 'template' && method === 'POST') return json(response, 201, await saveTemplate(db, id, await inputFor(admins)));
     }
 
     if (method === 'POST' && pathname === '/api/notices') {
       const input = await inputFor(directors);
       const title = text(input.title, 120, 'Asunto', true);
       const message = text(input.message, 4000, 'Mensaje', true);
-      const id = transaction(db, () => notify(db, title, message, null, member.id));
+      const id = await notify(db, title, message, null, member.id);
       return json(response, 201, { id });
     }
     route = pathname.match(/^\/api\/notices\/([\w-]+)\/read$/);
     if (route && method === 'PUT') {
       await inputFor();
-      const result = db.prepare('UPDATE inbox SET read_at = coalesce(read_at, ?) WHERE notice_id = ? AND member_id = ?')
+      const result = await db.prepare('UPDATE inbox SET read_at = coalesce(read_at, ?) WHERE notice_id = ? AND member_id = ?')
         .run(now(), route[1], member.id);
       requireThat(result.changes, 404, 'Aviso no encontrado.');
       return json(response, 200, {});
     }
-    if (method === 'POST' && pathname === '/api/works') return json(response, 201, createWork(db, await inputFor(admins)));
+    if (method === 'POST' && pathname === '/api/works') return json(response, 201, await createWork(db, await inputFor(admins)));
     route = pathname.match(/^\/api\/works\/([\w-]+)\/scores$/);
     if (route && method === 'POST') {
-      return json(response, 201, uploadPdf(db, member, await inputFor(admins, pdfLimit), { workId: route[1] }));
+      return json(response, 201, await uploadPdf(db, member, await inputFor(admins, pdfLimit), { workId: route[1] }));
     }
     route = pathname.match(/^\/api\/files\/([\w-]+)(\/approve)?$/);
     if (route) {
-      if (!route[2] && method === 'GET') return servePdf(db, member, route[1], response);
+      if (!route[2] && method === 'GET') return await servePdf(db, member, route[1], response);
       if (route[2] && method === 'PUT') {
         await inputFor(directors);
-        return json(response, 200, approveScore(db, member, route[1]));
+        return json(response, 200, await approveScore(db, member, route[1]));
       }
     }
     throw new HttpError(404, 'Ruta no encontrada.');

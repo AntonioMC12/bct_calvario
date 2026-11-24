@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { randomBytes, createECDH } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import { createAppServer } from '../scripts/serve.mjs';
-import { openDatabase } from '../server/db.mjs';
+import { testStore } from '../scripts/test-store.mjs';
 import { hashPassword } from '../server/security.mjs';
 import { notify } from '../server/events.mjs';
 import { configurePush, createPushWorker } from '../server/push.mjs';
 
-const db = openDatabase(':memory:');
+const { db,close } = await testStore();
 const password = 'Prueba-efimera-2';
 const mail = [];
 const claims = new Map();
@@ -57,7 +57,7 @@ const signIn = (client,name) => client('/login','POST',{ email:name + '@test.inv
 before(async () => {
   const hash = await hashPassword(password);
   for (const [id,role] of [['admin','admin'],['member','musician'],['another','musician'],['director','director']]) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO members(id,email,password,name,instrument,voice,role,status,created_at)
       VALUES (?, ?, ?, ?, 'Corneta', '', ?, 'active', ?)
     `).run(id,id + '@test.invalid',hash,id,role,new Date().toISOString());
@@ -68,7 +68,7 @@ before(async () => {
 
 after(async () => {
   await new Promise(resolve => server.close(resolve));
-  db.close();
+  await close();
 });
 
 test('Google requiere un token válido, alta completa y aprobación', async () => {
@@ -95,7 +95,7 @@ test('Google requiere un token válido, alta completa y aprobación', async () =
   assert.deepEqual(mail,[]);
   assert.equal((await user('/login','POST',{ email,password })).status,401);
   assert.equal((await google(browser(),token)).status,200);
-  db.prepare("UPDATE members SET status='inactive' WHERE id = ?").run(member.id);
+  await db.prepare("UPDATE members SET status='inactive' WHERE id = ?").run(member.id);
   assert.equal((await google(browser(),token)).status,403);
   assert.equal((await user('/dashboard')).status,403);
 });
@@ -145,7 +145,7 @@ test('Web Push protege las suscripciones, reintenta y conserva la lectura indepe
   assert.equal((await two('/push','POST',{ ...data,keys:{ ...keys,auth:randomBytes(16).toString('base64url') } })).status,409);
   await two('/push','DELETE',{ endpoint:data.endpoint });
   assert.deepEqual((await one('/push')).data.bindings,[enrolled.data.id]);
-  const notice = notify(db,'Aviso privado','Texto privado');
+  const notice = await notify(db,'Aviso privado','Texto privado');
   const sent = [];
   let offset = 0;
   let reply = 503;
@@ -168,12 +168,12 @@ test('Web Push protege las suscripciones, reintenta y conserva la lectura indepe
   assert.equal(inbox.read_at,null);
 
   reply = 410;
-  notify(db,'Siguiente','Se borra la suscripción caducada.');
+  await notify(db,'Siguiente','Se borra la suscripción caducada.');
   await worker.drain();
   assert.deepEqual((await one('/push')).data.bindings,[]);
   assert.equal((await one('/push','POST',data)).status,200);
-  notify(db,'Otro aviso','El logout cancela este trabajo.');
+  await notify(db,'Otro aviso','El logout cancela este trabajo.');
   await one('/logout','POST',{});
-  assert.equal(db.prepare('SELECT count(*) AS n FROM push_jobs').get().n,0);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM push_jobs').get()).n,0);
   assert.equal((await one('/push')).status,401);
 });

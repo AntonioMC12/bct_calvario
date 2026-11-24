@@ -5,6 +5,7 @@ import { backup, DatabaseSync } from 'node:sqlite';
 import { digest } from '../server/security.mjs';
 
 const [, , output] = process.argv;
+if (process.env.CALVARIO_DATABASE_URL) throw new Error('Para respaldar Supabase, usa pg_dump con el esquema calvario.');
 if (!output?.toLowerCase().endsWith('.sqlite')) throw new Error('Uso: npm run backup -- data/copias/calvario.sqlite');
 const target = resolve(output);
 const temporary = target + '.' + randomUUID() + '.tmp';

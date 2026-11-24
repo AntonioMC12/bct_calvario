@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { transaction } from './db.mjs';
+import { transaction } from './data.mjs';
 import { audit } from './events.mjs';
 import { requireThat } from './http.mjs';
 import { digest, hashPassword } from './security.mjs';
@@ -8,17 +8,17 @@ const minute = 60000;
 const lifetime = { verify: 24 * 60 * minute, reset: 30 * minute };
 
 export function createAccountMail(db, sendMail, { now = Date.now } = {}) {
-  function issue(member, purpose, origin) {
+  async function issue(member, purpose, origin) {
     const timestamp = now();
     const id = randomBytes(32).toString('base64url');
     const hash = digest(id);
-    const created = transaction(db, () => {
-      db.prepare('DELETE FROM account_tokens WHERE expires <= ?').run(timestamp);
-      const count = db.prepare(`
+    const created = await transaction(db, async () => {
+      await db.prepare('DELETE FROM account_tokens WHERE expires <= ?').run(timestamp);
+      const count = await db.prepare(`
         SELECT created FROM account_tokens WHERE member_id = ? AND purpose = ? ORDER BY created DESC LIMIT 1
       `).get(member.id, purpose);
       if (count && count.created > timestamp - 2 * minute) return false;
-      db.prepare('INSERT INTO account_tokens VALUES (?, ?, ?, ?, ?)').run(hash, member.id, purpose, timestamp, timestamp + lifetime[purpose]);
+      await db.prepare('INSERT INTO account_tokens VALUES (?, ?, ?, ?, ?)').run(hash, member.id, purpose, timestamp, timestamp + lifetime[purpose]);
       return true;
     });
     if (!created) return;
@@ -41,9 +41,9 @@ export function createAccountMail(db, sendMail, { now = Date.now } = {}) {
     });
   }
 
-  function lookup(token, purpose) {
+  async function lookup(token, purpose) {
     requireThat(typeof token === 'string' && /^[A-Za-z0-9_-]{43}$/.test(token), 422, 'El enlace es inválido o ha caducado.');
-    const row = db.prepare(`
+    const row = await db.prepare(`
       SELECT m.id FROM account_tokens t JOIN members m ON m.id = t.member_id
       WHERE t.digest = ? AND t.purpose = ? AND t.expires > ? AND m.status IN ('active','pending')
         AND m.password_enabled = 1
@@ -52,26 +52,26 @@ export function createAccountMail(db, sendMail, { now = Date.now } = {}) {
     return row.id;
   }
 
-  function verify(token) {
-    transaction(db, () => {
-      const id = lookup(token, 'verify');
-      db.prepare('UPDATE members SET email_verified_at = coalesce(email_verified_at, ?) WHERE id = ?')
+  async function verify(token) {
+    await transaction(db, async () => {
+      const id = await lookup(token, 'verify');
+      await db.prepare('UPDATE members SET email_verified_at = coalesce(email_verified_at, ?) WHERE id = ?')
         .run(new Date(now()).toISOString(), id);
-      db.prepare("DELETE FROM account_tokens WHERE member_id = ? AND purpose = 'verify'").run(id);
-      audit(db, id, 'access.verify_email', id);
+      await db.prepare("DELETE FROM account_tokens WHERE member_id = ? AND purpose = 'verify'").run(id);
+      await audit(db, id, 'access.verify_email', id);
     });
   }
 
   async function reset(token, newPassword) {
-    lookup(token, 'reset');
+    await lookup(token, 'reset');
     const hash = await hashPassword(newPassword);
-    transaction(db, () => {
-      const id = lookup(token, 'reset');
-      db.prepare('UPDATE members SET password = ?, email_verified_at = coalesce(email_verified_at, ?) WHERE id = ?')
+    await transaction(db, async () => {
+      const id = await lookup(token, 'reset');
+      await db.prepare('UPDATE members SET password = ?, email_verified_at = coalesce(email_verified_at, ?) WHERE id = ?')
         .run(hash, new Date(now()).toISOString(), id);
-      db.prepare('DELETE FROM account_tokens WHERE member_id = ?').run(id);
-      db.prepare('DELETE FROM sessions WHERE member_id = ?').run(id);
-      audit(db, id, 'access.reset_password', id);
+      await db.prepare('DELETE FROM account_tokens WHERE member_id = ?').run(id);
+      await db.prepare('DELETE FROM sessions WHERE member_id = ?').run(id);
+      await audit(db, id, 'access.reset_password', id);
     });
   }
 
