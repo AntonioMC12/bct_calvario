@@ -4,6 +4,7 @@ build/
 coverage/
 .cache/
 tmp/
+/supabase/.temp/
 data/
 *.sqlite
 *.sqlite-shm
