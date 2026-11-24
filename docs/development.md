@@ -1,5 +1,11 @@
 # Seguimiento del desarrollo
 
+## 2026-11-24 · Permisos de Administración y Dirección
+
+- DP02. Administración y Dirección comparten los permisos de gestión en la interfaz y la API. Ambos roles pueden gestionar formaciones, asistencia, obras, partituras y avisos. Los motivos privados de ausencia son visibles para quien los escribió y para ambos roles de gestión. El informe de asistencia sigue siendo agregado.
+- Los perfiles mantienen sus nombres y los músicos conservan sus permisos. El cambio no requiere migración y actualiza la caché de la PWA a `v10`.
+- Se comprobó en navegador que ambos roles tienen las mismas herramientas y acceden a los motivos privados, con una cuenta de músico como control. Pasaron `npm run check`, 22 pruebas generales y 18 de PostgreSQL.
+
 ## 2026-11-24 · Carga de partituras por dirección
 
 - RF31–RF32. Dirección puede entrar en Carga de partituras, crear obras y subir PDF en lotes. El catálogo de gestión muestra obras aún sin archivos para que puedan usarse como destino. Editar los datos de una obra existente sigue reservado a administración. Los PDF nuevos quedan privados hasta que dirección los valide expresamente.

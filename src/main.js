@@ -9,6 +9,7 @@ import { access, mailRoutes } from './access.js';
 import { bindGoogle, googleButton } from './google.js';
 import { clearPush, pushSettings } from './push.js';
 import { backend, captureSession, clearSession, hosted, openPrivateLink, suspendSession } from './connection.js';
+import { canManage } from './roles.js';
 
 const shell = document.querySelector('#shell');
 const dialog = document.querySelector('#dialog');
@@ -280,7 +281,7 @@ function bindNotices(content, id) {
       (notice.read_at ? pill('Lectura confirmada · ' + displayTime(notice.read_at),'good') :
         state.offline ? pill('Pendiente de lectura','waiting') : '<form class="stack">' +
           '<p class="muted">Abrir el aviso no confirma su lectura.</p>' + errorRegion + button('Confirmar lectura') + '</form>') + '</article>' +
-      (state.member.role === 'director' && !state.offline ? '<section class="card stack notice-receipts"><h2>Confirmaciones de lectura</h2>' +
+      (canManage(state.member.role) && !state.offline ? '<section class="card stack notice-receipts"><h2>Confirmaciones de lectura</h2>' +
         '<p class="muted" role="status">Consultando confirmaciones…</p></section>' : '');
     const receipts = content.querySelector('.notice-receipts p');
     if (receipts) api('/notices/' + id + '/receipts').then(({ total, confirmed }) => {
@@ -299,7 +300,7 @@ function bindNotices(content, id) {
   const unread = data.notices.filter(item => !item.read_at);
   const list = noticeFilter === 'all' ? data.notices : unread;
   content.innerHTML = header('Avisos','Información de la banda',
-    state.member.role === 'director' && !state.offline ? '<a class="button primary" href="#/gestion/aviso">' + icon('plus') + 'Nuevo aviso</a>' : '') +
+    canManage(state.member.role) && !state.offline ? '<a class="button primary" href="#/gestion/aviso">' + icon('plus') + 'Nuevo aviso</a>' : '') +
     segment('Filtrar avisos',[['unread','Pendientes · ' + unread.length,'bell'],['all','Todos','list']],noticeFilter) +
     '<div class="stack notice-list">' + (list.length ? list.map(item => '<article class="card stack notice-card">' +
     '<div class="event-labels"><p class="notice-date muted">' + icon('bell') + displayTime(item.created_at) + '</p>' +
@@ -364,7 +365,7 @@ function profile(content, mode) {
     (state.pushEnabled ? row('Notificaciones','Avisos en este dispositivo','#/perfil/notificaciones','avisos') : '') +
     (state.google ? row('Acceso con Google',member.google_linked ? 'Cuenta vinculada' : 'Vincular cuenta','#/perfil/google','perfil') : '') +
     '<div class="row actions">' + button('Actualizar datos','quiet','id="retry"') + button('Cerrar sesión','quiet','id="signout"') + '</div></div></section>' +
-    (!state.offline && member.role !== 'musician' ? '<section>' + sectionTitle('Herramientas de gestión','', 'gestion') + managementTools(member) + '</section>' : '') +
+    (!state.offline && canManage(member.role) ? '<section>' + sectionTitle('Herramientas de gestión','', 'gestion') + managementTools() + '</section>' : '') +
     '</div></div>';
   content.querySelector('#retry').addEventListener('click', bootstrap);
   content.querySelector('#signout').addEventListener('click', () => logout().catch(error => toast(error.message)));
@@ -409,7 +410,7 @@ async function render() {
   const brand = '<a class="brand" href="#/inicio"><img src="./public/escudo.png" width="32" height="32" alt="">Calvario</a>';
   shell.innerHTML = '<a class="skip" href="#content">Saltar al contenido</a><div class="layout"><aside class="rail">' +
     brand + '<nav aria-label="Navegación principal">' + nav +
-    (!state.offline && state.member.role !== 'musician' ? '<a href="#/gestion"' + (route === 'gestion' ? ' aria-current="page"' : '') +
+    (!state.offline && canManage(state.member.role) ? '<a href="#/gestion"' + (route === 'gestion' ? ' aria-current="page"' : '') +
     '>' + icon('gestion') + '<span>Gestión</span></a>' : '') +
     '</nav><span class="rail-footer">Banda de Cornetas y Tambores</span></aside><div class="main-area">' +
     '<div class="mobile-brand">' + brand + '<a class="avatar" href="#/perfil" aria-label="Mi perfil">' +

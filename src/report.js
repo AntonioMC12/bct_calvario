@@ -1,5 +1,6 @@
 import { back, bindForm, button, dayKey, displayTime, empty, errorRegion, esc, field, header,
   options, row, sectionTitle } from './ui.js';
+import { canManage } from './roles.js';
 
 const columns = [
   ['yes','Asistirán'], ['no','No asistirán'], ['unconfirmed','Sin confirmar'],
@@ -47,8 +48,8 @@ function breakdown(groups) {
 
 export function attendanceReportPage(content, ctx) {
   const previous = back('Gestión','#/gestion');
-  if (ctx.state.member.role !== 'director' || ctx.state.offline) {
-    content.innerHTML = previous + empty('Solo dirección puede consultar el informe con conexión.');
+  if (!canManage(ctx.state.member.role) || ctx.state.offline) {
+    content.innerHTML = previous + empty('Consultar el informe requiere permisos de gestión y conexión.');
     return;
   }
   const today = dayKey(Date.now());

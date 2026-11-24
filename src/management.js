@@ -1,24 +1,24 @@
 import { area, back, bindForm, button, displayTime, empty, errorRegion, esc, field, header, icon, initials, instrument,
   link, normalize, options, otherIntention, pill, role, row, sectionTitle } from './ui.js';
 import { localMinute } from './time.js';
+import { canManage } from './roles.js';
 
 const eventTypes = ['Ensayo','Actuación','Reunión','Procesión','Certamen','Concierto'];
-const manager = state => !state.offline && ['admin','director'].includes(state.member.role);
+const manager = state => !state.offline && canManage(state.member.role);
 const accessStatus = { active:'Activo',pending:'Pendiente',rejected:'Rechazado',inactive:'De baja' };
 const eventRoute = id => '#/calendario/' + id;
 
-export function managementTools(member) {
-  const shared = row('Solicitudes','Revisar nuevas incorporaciones','#/gestion/solicitudes','users') +
+export function managementTools() {
+  return '<div class="row-list">' + row('Solicitudes','Revisar nuevas incorporaciones','#/gestion/solicitudes','users') +
     row('Directorio','Contactos y estado de acceso','#/gestion/miembros','perfil') +
     row('Eventos','Crear, editar y cancelar convocatorias','#/calendario','calendario') +
-    row('Carga de partituras','Crear obras y subir PDF','#/repertorio/archivo','upload');
-  const tools = member.role === 'admin' ? row('Formaciones','Selecciona una convocatoria','#/gestion/formaciones','grid') :
+    row('Carga de partituras','Gestionar obras y subir PDF','#/repertorio/archivo','upload') +
+    row('Formaciones','Selecciona una convocatoria','#/gestion/formaciones','grid') +
     row('Corregir intenciones','Selecciona una convocatoria','#/gestion/corregir','perfil') +
     row('Pasar lista','Presencia real por convocatoria','#/gestion/presencia','check') +
     row('Informe de asistencia','Consultar y exportar por periodo','#/gestion/asistencia','chart') +
     row('Validar partituras','Revisar PDF pendientes de distribución','#/repertorio/validacion','file') +
-    row('Publicar aviso','Enviar a la banda activa','#/gestion/aviso','bell');
-  return '<div class="row-list">' + shared + tools + '</div>';
+    row('Publicar aviso','Enviar a la banda activa','#/gestion/aviso','bell') + '</div>';
 }
 
 export function pdfContent(file) {
@@ -38,17 +38,16 @@ export async function management(content, ctx, mode) {
     return;
   }
   if (!mode) {
-    content.innerHTML = header('Gestión',role[ctx.state.member.role]) + managementTools(ctx.state.member);
+    content.innerHTML = header('Gestión',role[ctx.state.member.role]) + managementTools();
     return;
   }
   if (['formaciones','corregir','presencia'].includes(mode)) {
     const routes = {
-      formaciones: ['admin','Formaciones','formacion','grid'], corregir: ['director','Corregir intenciones','corregir','perfil'],
-      presencia: ['director','Pasar lista','pasar-lista','check'],
+      formaciones: ['Formaciones','formacion','grid'], corregir: ['Corregir intenciones','corregir','perfil'],
+      presencia: ['Pasar lista','pasar-lista','check'],
     };
-    const [allowed,title,path,glyph] = routes[mode];
+    const [title,path,glyph] = routes[mode];
     const previous = back('Gestión','#/gestion');
-    if (ctx.state.member.role !== allowed) { content.innerHTML = previous + empty('Tu perfil no tiene acceso a esta herramienta.'); return; }
     const events = [...ctx.state.data.events].filter(event => mode !== 'presencia' ||
       (!event.cancelled && Date.parse(event.starts) <= Date.now()));
     if (mode === 'presencia') events.reverse();
@@ -181,13 +180,13 @@ export async function eventEditor(content, ctx, id) {
 
 export function composeNotice(content, ctx) {
   const previous = back('Avisos','#/avisos');
-  if (ctx.state.member.role !== 'director' || ctx.state.offline) {
-    content.innerHTML = previous + empty('Solo dirección puede publicar avisos con conexión.');
+  if (!manager(ctx.state)) {
+    content.innerHTML = previous + empty('Publicar avisos requiere permisos de gestión y conexión.');
     return;
   }
   const events = ctx.state.data.events;
   const draft = ctx.state.noticeDraft ?? {};
-  content.innerHTML = previous + header('Publicar comunicado','Dirección') + '<div class="event-layout">' +
+  content.innerHTML = previous + header('Publicar comunicado') + '<div class="event-layout">' +
     '<form class="card stack"><h2>Contenido del aviso</h2>' + field('title','Asunto','required maxlength="120"',draft.title) +
     area('message','Mensaje','required maxlength="4000" rows="7"',draft.message) + '<p id="notice-length" class="muted"></p>' +
     (events.length ? '<label>Convocatoria relacionada (opcional)<select name="eventId"><option value="">Ninguna</option>' +
@@ -235,8 +234,8 @@ export function composeNotice(content, ctx) {
 export async function formationEditor(content, ctx, id) {
   const href = eventRoute(id);
   const previous = back('Evento',href);
-  if (ctx.state.member.role !== 'admin' || ctx.state.offline) {
-    content.innerHTML = previous + empty('Solo administración puede editar formaciones con conexión.');
+  if (!manager(ctx.state)) {
+    content.innerHTML = previous + empty('Editar formaciones requiere permisos de gestión y conexión.');
     return;
   }
   const event = ctx.state.data.events.find(item => item.id === id);

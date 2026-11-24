@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { body, choice, HttpError, json, requireThat, text } from './http.mjs';
 import { checkPassword, endSession, expiredCookie, getMember, hashPassword, sessionCookie, startSession, tokenHash } from './security.mjs';
-import { attendanceReport, audit, calendarFile, cancelEvent, eventById, eventDetail, eventList, managers, notify, saveEvent, saveIntention, savePresence, sendDueReminders } from './events.mjs';
+import { attendanceReport, audit, calendarFile, cancelEvent, eventById, eventDetail, eventList, notify, saveEvent, saveIntention, savePresence, sendDueReminders } from './events.mjs';
+import { canManage, managementRoles } from '../src/roles.js';
 import { catalog, saveWork, servePdf, approveScore, uploadPdf } from './music.mjs';
 import { formation, saveFormation, saveTemplate } from './formations.mjs';
 import { transaction } from './store.mjs';
@@ -9,8 +10,6 @@ import { createAccountMail } from './account-mail.mjs';
 import { authenticateWithGoogle } from './google.mjs';
 import { subscribe, unsubscribe } from './push.mjs';
 
-const directors = ['director'];
-const admins = ['admin'];
 const pdfLimit = 7_100_000;
 const now = () => new Date().toISOString();
 
@@ -195,7 +194,7 @@ export function createApi(db, { sendMail, accountClock, google, push, publicSite
 
     if (method === 'GET' && pathname === '/api/dashboard') return json(response, 200, await dashboard(db, member));
     if (method === 'POST' && pathname === '/api/reports/attendance') {
-      return json(response, 200, await attendanceReport(db, await inputFor(directors)));
+      return json(response, 200, await attendanceReport(db, await inputFor(managementRoles)));
     }
 
     if (pathname === '/api/push') {
@@ -215,7 +214,7 @@ export function createApi(db, { sendMail, accountClock, google, push, publicSite
     }
 
     if (method === 'GET' && pathname === '/api/management') {
-      requireThat(managers.includes(member.role), 403, 'Tu perfil no puede consultar los contactos.');
+      requireThat(canManage(member.role), 403, 'Tu perfil no puede consultar los contactos.');
       const members = await db.prepare(`
         SELECT id, name, email, instrument, voice, role, status, created_at, email_verified_at, requires_email_verification
         FROM members ORDER BY name
@@ -224,16 +223,16 @@ export function createApi(db, { sendMail, accountClock, google, push, publicSite
     }
 
     let route = pathname.match(/^\/api\/requests\/([\w-]+)$/);
-    if (route && method === 'PUT') return json(response, 200, await review(db, member, route[1], await inputFor(managers)));
+    if (route && method === 'PUT') return json(response, 200, await review(db, member, route[1], await inputFor(managementRoles)));
     if (method === 'POST' && pathname === '/api/events') {
-      return json(response, 201, await saveEvent(db, member, await inputFor(managers)));
+      return json(response, 201, await saveEvent(db, member, await inputFor(managementRoles)));
     }
 
     route = pathname.match(/^\/api\/events\/([\w-]+)(?:\/(calendar|cancel|intention|presence|attachments|formation|template)(?:\/([\w-]+))?)?$/);
     if (route) {
       const [, id, action, related] = route;
       if (!action && method === 'GET') return json(response, 200, await eventDetail(db, member, id));
-      if (!action && method === 'PUT') return json(response, 200, await saveEvent(db, member, await inputFor(managers), id));
+      if (!action && method === 'PUT') return json(response, 200, await saveEvent(db, member, await inputFor(managementRoles), id));
       if (action === 'calendar' && method === 'GET') {
         const data = calendarFile(await eventById(db, id));
         return response.writeHead(200, {
@@ -242,19 +241,19 @@ export function createApi(db, { sendMail, accountClock, google, push, publicSite
         }).end(data);
       }
       if (action === 'cancel' && method === 'POST') {
-        const input = await inputFor(managers);
+        const input = await inputFor(managementRoles);
         return json(response, 200, await cancelEvent(db, member, id, input.version));
       }
       if (action === 'intention' && method === 'PUT') {
-        const input = await inputFor(related ? directors : null);
+        const input = await inputFor(related ? managementRoles : null);
         return json(response, 200, await saveIntention(db, member, id, related ?? member.id, input));
       }
-      if (action === 'presence' && method === 'PUT') return json(response, 200, await savePresence(db, member, id, await inputFor(directors, 100000)));
+      if (action === 'presence' && method === 'PUT') return json(response, 200, await savePresence(db, member, id, await inputFor(managementRoles, 100000)));
       if (action === 'attachments' && method === 'POST') {
-        return json(response, 201, await uploadPdf(db, member, await inputFor(managers, pdfLimit), { eventId: id }));
+        return json(response, 201, await uploadPdf(db, member, await inputFor(managementRoles, pdfLimit), { eventId: id }));
       }
       if (action === 'formation' && method === 'GET') {
-        requireThat(admins.includes(member.role), 403, 'La gestión de formaciones corresponde a administración.');
+        requireThat(canManage(member.role), 403, 'Tu perfil no puede gestionar formaciones.');
         const templates = await db.prepare('SELECT * FROM templates ORDER BY name').all();
         const sources = await db.prepare('SELECT e.id, e.title, e.starts FROM formations f JOIN events e ON e.id = f.event_id WHERE e.id <> ? ORDER BY e.starts DESC').all(id);
         const members = await db.prepare(`
@@ -264,17 +263,17 @@ export function createApi(db, { sendMail, accountClock, google, push, publicSite
         `).all(id);
         return json(response, 200, { ...await formation(db, id), templates, sources, members });
       }
-      if (action === 'formation' && method === 'PUT') return json(response, 200, await saveFormation(db, member, id, await inputFor(admins)));
-      if (action === 'template' && method === 'POST') return json(response, 201, await saveTemplate(db, id, await inputFor(admins)));
+      if (action === 'formation' && method === 'PUT') return json(response, 200, await saveFormation(db, member, id, await inputFor(managementRoles)));
+      if (action === 'template' && method === 'POST') return json(response, 201, await saveTemplate(db, id, await inputFor(managementRoles)));
     }
 
     if (method === 'GET' && pathname === '/api/notices/audience') {
-      requireThat(directors.includes(member.role),403,'Solo dirección puede consultar los destinatarios.');
+      requireThat(canManage(member.role),403,'Tu perfil no puede consultar los destinatarios.');
       const result = await db.prepare("SELECT count(*) AS total FROM members WHERE status = 'active'").get();
       return json(response,200,result);
     }
     if (method === 'POST' && pathname === '/api/notices') {
-      const input = await inputFor(directors);
+      const input = await inputFor(managementRoles);
       const title = text(input.title, 120, 'Asunto', true);
       const message = text(input.message, 4000, 'Mensaje', true);
       const event = text(input.eventId,64,'Convocatoria');
@@ -286,7 +285,7 @@ export function createApi(db, { sendMail, accountClock, google, push, publicSite
     }
     route = pathname.match(/^\/api\/notices\/([\w-]+)\/receipts$/);
     if (route && method === 'GET') {
-      requireThat(directors.includes(member.role),403,'Solo dirección puede consultar las lecturas.');
+      requireThat(canManage(member.role),403,'Tu perfil no puede consultar las lecturas.');
       const counts = await db.prepare(`
         SELECT count(i.member_id) AS total, count(i.read_at) AS confirmed
         FROM notices n LEFT JOIN inbox i ON i.notice_id = n.id WHERE n.id = ? GROUP BY n.id
@@ -302,18 +301,18 @@ export function createApi(db, { sendMail, accountClock, google, push, publicSite
       requireThat(result.changes, 404, 'Aviso no encontrado.');
       return json(response, 200, {});
     }
-    if (method === 'POST' && pathname === '/api/works') return json(response, 201, await saveWork(db, await inputFor(managers)));
+    if (method === 'POST' && pathname === '/api/works') return json(response, 201, await saveWork(db, await inputFor(managementRoles)));
     route = pathname.match(/^\/api\/works\/([\w-]+)$/);
-    if (route && method === 'PUT') return json(response,200,await saveWork(db,await inputFor(admins),route[1]));
+    if (route && method === 'PUT') return json(response,200,await saveWork(db,await inputFor(managementRoles),route[1]));
     route = pathname.match(/^\/api\/works\/([\w-]+)\/scores$/);
     if (route && method === 'POST') {
-      return json(response, 201, await uploadPdf(db, member, await inputFor(managers, pdfLimit), { workId: route[1] }));
+      return json(response, 201, await uploadPdf(db, member, await inputFor(managementRoles, pdfLimit), { workId: route[1] }));
     }
     route = pathname.match(/^\/api\/files\/([\w-]+)(\/approve)?$/);
     if (route) {
       if (!route[2] && method === 'GET') return await servePdf(db, member, route[1], response);
       if (route[2] && method === 'PUT') {
-        await inputFor(directors);
+        await inputFor(managementRoles);
         return json(response, 200, await approveScore(db, member, route[1]));
       }
     }

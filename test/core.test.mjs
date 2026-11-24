@@ -68,7 +68,7 @@ after(async () => {
   await close();
 });
 
-test('dirección consulta informes agregados sin motivos privados y acota el periodo', async () => {
+test('administración y dirección consultan el mismo informe agregado sin motivos privados', async () => {
   const saved = await director('/events','POST',{ ...previous,title:'Ensayo para informe' });
   assert.equal(saved.status,201);
   const target = '/events/' + saved.data.id;
@@ -83,10 +83,12 @@ test('dirección consulta informes agregados sin motivos privados y acota el per
   const report = '/reports/attendance';
   assert.equal((await client()(report,'POST',filters)).status,401);
   assert.equal((await musician(report,'POST',filters)).status,403);
-  assert.equal((await admin(report,'POST',filters)).status,403);
   assert.equal((await director(report,'POST',{ ...filters,from:'2026-02-30' })).status,422);
   const result = await director(report,'POST',filters);
   assert.equal(result.status,200);
+  const adminResult = await admin(report,'POST',filters);
+  assert.equal(adminResult.status,200);
+  assert.deepEqual(adminResult.data,result.data);
   const rows = result.data.rows.filter(row => row.id === saved.data.id);
   assert.equal(rows.length,1);
   assert.deepEqual(Object.fromEntries(['recorded','yes','no','present','absent'].map(key => [key,rows[0][key]])),
@@ -95,24 +97,24 @@ test('dirección consulta informes agregados sin motivos privados y acota el per
   assert.ok(!(await director(report,'POST',{ ...filters,type:'Concierto' })).data.rows.some(row => row.id === saved.data.id));
 });
 
-test('un comunicado vincula la convocatoria y solo dirección consulta acuses agregados', async () => {
+test('administración y dirección gestionan comunicados y consultan acuses agregados', async () => {
   const event = await director('/events','POST',{ ...previous,title:'Convocatoria del comunicado' });
   assert.equal(event.status,201);
   const content = { title:'Comunicado de prueba',message:'Recordatorio de ensayo.',eventId:event.data.id };
-  assert.equal((await admin('/notices','POST',content)).status,403);
+  assert.equal((await musician('/notices','POST',content)).status,403);
   assert.equal((await director('/notices','POST',{ ...content,eventId:'inexistente' })).status,404);
   assert.equal((await musician('/notices/audience')).status,403);
   const audience = await director('/notices/audience');
   assert.equal(audience.status,200);
-  const sent = await director('/notices','POST',content);
+  assert.deepEqual((await admin('/notices/audience')).data,audience.data);
+  const sent = await admin('/notices','POST',content);
   assert.equal(sent.status,201);
   const link = '/notices/' + sent.data.id;
   const own = (await musician('/dashboard')).data.notices.find(item => item.id === sent.data.id);
   assert.equal(own.event_id,event.data.id);
   assert.equal(own.read_at,null);
   assert.equal((await musician(link+'/receipts')).status,403);
-  assert.equal((await admin(link+'/receipts')).status,403);
-  assert.deepEqual((await director(link+'/receipts')).data,{ total:audience.data.total, confirmed:0 });
+  assert.deepEqual((await admin(link+'/receipts')).data,{ total:audience.data.total, confirmed:0 });
   for (let i = 0; i < 2; i++) assert.equal((await musician(link+'/read','PUT',{})).status,200);
   assert.deepEqual((await director(link+'/receipts')).data,{ total:audience.data.total, confirmed:1 });
 });
@@ -188,13 +190,19 @@ test('intención, reintento idempotente, corrección y privacidad', async () => 
   assert.equal(receipt.status,200);
   assert.deepEqual((await musician(path + '/intention','PUT',update)).data,receipt.data);
   const roster = async send => (await send(path)).data.roster.find(row => row.id === ids.musician);
-  assert.equal((await roster(admin)).reason,null);
-  assert.equal((await roster(newcomer)).reason,null);
-  assert.equal((await roster(director)).reason,update.reason);
-  assert.equal('email' in await roster(director),false);
+  const managed = await roster(admin);
+  assert.deepEqual(await roster(director),managed);
+  assert.equal(managed.reason,update.reason);
+  assert.equal(managed.intention_version,1);
+  assert.equal('email' in managed,false);
+  const publicRow = await roster(newcomer);
+  assert.equal(publicRow.reason,null);
+  assert.equal(publicRow.presence,null);
+  assert.equal(publicRow.intention_version,null);
+  assert.equal((await musician(path)).data.event.reason,update.reason);
   const correction = path + '/intention/' + ids.musician;
-  assert.equal((await admin(correction,'PUT',{ value:'yes', version:1 })).status,403);
-  assert.equal((await director(correction,'PUT',{ value:'yes', version:1 })).status,200);
+  assert.equal((await newcomer(correction,'PUT',{ value:'yes', version:1 })).status,403);
+  assert.equal((await admin(correction,'PUT',{ value:'yes', version:1 })).status,200);
   assert.equal((await musician(path + '/intention','PUT',update)).data.code,'conflict');
   assert.equal((await roster(director)).intention,'yes');
 });
@@ -206,11 +214,11 @@ test('presencia real independiente y cierre al inicio', async () => {
   const member = ids.musician;
   assert.equal((await director(path + '/intention/' + member,'PUT',{ value:'yes', version:0 })).status,200);
   const updates = { rows:[{ id:member, value:'absent' }] };
-  assert.equal((await admin(path + '/presence','PUT',updates)).status,403);
+  assert.equal((await musician(path + '/presence','PUT',updates)).status,403);
   assert.equal((await director(path + '/presence','PUT',{ rows:[...updates.rows,{ id:ids.admin,value:'invalid' }] })).status,422);
   const history = async () => (await musician('/dashboard')).data.events.find(row => row.id === past.id);
   assert.equal((await history()).presence,'unset');
-  assert.equal((await director(path + '/presence','PUT',updates)).status,200);
+  assert.equal((await admin(path + '/presence','PUT',updates)).status,200);
   assert.equal((await history()).intention,'yes');
   assert.equal((await history()).presence,'absent');
 });
@@ -234,7 +242,6 @@ test('cambio de horario, cancelación, recordatorio y confirmación individual d
   assert.equal((await musician('/notices/' + got.id + '/read','PUT',{})).status,200);
   assert.ok((await notices(musician)).find(notice => notice.id === got.id).read_at);
   assert.equal((await notices(admin)).find(notice => notice.id === got.id).read_at,null);
-  assert.equal((await admin('/notices','POST',{ title:'Privado',message:'Mensaje' })).status,403);
   assert.equal((await director('/notices','POST',{ title:'Información',message:'Mensaje' })).status,201);
 });
 
@@ -259,15 +266,20 @@ test('el recordatorio se recalcula y se emite una sola vez', async () => {
 
 test('formación manual con versiones y retiro explícito', async () => {
   const path = '/events/' + event.id + '/formation';
-  assert.equal((await director(path)).status,403);
+  assert.equal((await director(path)).status,200);
   assert.equal((await musician(path)).status,403);
   const member = ids.musician;
   const formation = { columns:2, positions:[null,member], version:0 };
+  assert.equal((await musician(path,'PUT',formation)).status,403);
   assert.equal((await admin(path,'PUT',{ ...formation, positions:[member,member] })).status,422);
-  assert.equal((await admin(path,'PUT',formation)).status,200);
+  assert.equal((await director(path,'PUT',formation)).status,200);
   assert.equal((await admin(path,'PUT',formation)).status,409);
   assert.equal((await admin(path,'PUT',{ ...formation, positions:[null,null], version:1 })).data.code,'removal');
   assert.equal((await admin(path)).data.positions[1],member);
+  const template = '/events/' + event.id + '/template';
+  assert.equal((await musician(template,'POST',{ name:'Dos columnas' })).status,403);
+  assert.equal((await director(template,'POST',{ name:'Dos columnas' })).status,201);
+  assert.ok((await admin(path)).data.templates.some(item => item.name === 'Dos columnas'));
 });
 
 test('dirección crea obras y carga partituras que siguen privadas hasta su validación', async () => {
@@ -293,13 +305,12 @@ test('dirección crea obras y carga partituras que siguen privadas hasta su vali
   assert.equal((await musician(pdf)).type,'application/pdf');
 });
 
-test('PDF privado, duplicados, validación por dirección y baja', async () => {
+test('edición de obras, PDF privado, duplicados, validación por administración y baja', async () => {
   work = (await admin('/works','POST',{ title:'Obra',authors:'Autor; Otra autora',genre:'Marcha' })).data;
   const update = { title:'Obra revisada',authors:'Autor; Otra autora',genre:'Marcha' };
-  assert.equal((await director('/works/' + work.id,'PUT',update)).status,403);
   assert.equal((await musician('/works/' + work.id,'PUT',update)).status,403);
   assert.equal((await admin('/works/inexistente','PUT',update)).status,404);
-  assert.equal((await admin('/works/' + work.id,'PUT',update)).status,200);
+  assert.equal((await director('/works/' + work.id,'PUT',update)).status,200);
   assert.equal((await admin('/dashboard')).data.works.find(item => item.id === work.id).title,update.title);
   const path = '/works/' + work.id + '/scores';
   const input = { name:'partitura.pdf',instrument:'Corneta',voice:'Primera',content:samplePdf().toString('base64') };
@@ -311,8 +322,10 @@ test('PDF privado, duplicados, validación por dirección y baja', async () => {
   const file = '/files/' + uploaded.data.id;
   assert.equal((await client()(file)).status,401);
   assert.equal((await musician(file)).status,404);
-  assert.equal((await admin(file + '/approve','PUT',{})).status,403);
-  assert.equal((await director(file + '/approve','PUT',{})).status,200);
+  assert.equal((await admin(file)).type,'application/pdf');
+  assert.equal((await director(file)).type,'application/pdf');
+  assert.equal((await musician(file + '/approve','PUT',{})).status,403);
+  assert.equal((await admin(file + '/approve','PUT',{})).status,200);
   assert.equal((await musician(file)).type,'application/pdf');
   await db.prepare("UPDATE members SET status = 'inactive' WHERE id = ?").run(ids.musician);
   assert.equal((await musician(file)).status,403);

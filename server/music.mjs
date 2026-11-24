@@ -2,20 +2,22 @@ import { randomUUID } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import { digest } from './security.mjs';
 import { requireThat, text } from './http.mjs';
-import { audit, eventById, managers } from './events.mjs';
+import { audit, eventById } from './events.mjs';
+import { canManage } from '../src/roles.js';
 import { transaction } from './store.mjs';
 
 export async function catalog(db, member) {
+  const management = canManage(member.role);
   const scores = await db.prepare(`
     SELECT id, work_id, name, instrument, voice, approved, length(content) AS bytes
-    FROM files WHERE work_id IS NOT NULL AND (approved = 1 OR ? IN ('admin','director'))
+    FROM files WHERE work_id IS NOT NULL AND (approved = 1 OR ? = 1)
     ORDER BY instrument, voice, name
-  `).all(member.role);
+  `).all(Number(management));
   const byWork = Map.groupBy(scores, file => file.work_id);
   const works = await db.prepare('SELECT * FROM works ORDER BY lower(title), title').all();
   return works
     .map(work => ({ ...work, scores: byWork.get(work.id) ?? [] }))
-    .filter(work => work.scores.length || managers.includes(member.role));
+    .filter(work => work.scores.length || management);
 }
 
 export async function saveWork(db, input, id = null) {
@@ -63,7 +65,7 @@ export async function approveScore(db, actor, id) {
 
 export async function servePdf(db, member, id, response) {
   const file = await db.prepare('SELECT * FROM files WHERE id = ?').get(id);
-  requireThat(file && (file.approved || ['admin','director'].includes(member.role)), 404, 'Documento no encontrado.');
+  requireThat(file && (file.approved || canManage(member.role)), 404, 'Documento no encontrado.');
   response.writeHead(200, {
     'Content-Type': 'application/pdf',
     'Content-Disposition': "inline; filename*=UTF-8''" + encodeURIComponent(file.name).replace(/['()*]/g, c =>

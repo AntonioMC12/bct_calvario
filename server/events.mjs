@@ -3,8 +3,8 @@ import { Buffer } from 'node:buffer';
 import { transaction } from './store.mjs';
 import { choice, integer, requireThat, text } from './http.mjs';
 import { madridInstant } from '../src/time.js';
+import { canManage } from '../src/roles.js';
 
-export const managers = ['admin', 'director'];
 export const types = ['Ensayo', 'Actuación', 'Reunión', 'Procesión', 'Certamen', 'Concierto'];
 const now = () => new Date().toISOString();
 
@@ -57,19 +57,20 @@ export async function eventList(db, member) {
 
 export async function eventDetail(db, member, id) {
   const event = await eventById(db, id);
+  const management = Number(canManage(member.role));
   const own = await db.prepare('SELECT value AS intention, reason, version AS intention_version FROM intentions WHERE event_id = ? AND member_id = ?')
     .get(id, member.id);
   const roster = await db.prepare(`
     SELECT m.id, m.name, m.instrument, m.voice, m.status = 'active' AS active, coalesce(i.value, 'unset') AS intention,
-      CASE WHEN ? = 'director' THEN coalesce(p.value,'unset') END AS presence,
-      CASE WHEN ? = 'director' THEN i.reason END AS reason,
-      CASE WHEN ? = 'director' THEN coalesce(i.version, 0) END AS intention_version
+      CASE WHEN ? = 1 THEN coalesce(p.value,'unset') END AS presence,
+      CASE WHEN ? = 1 THEN i.reason END AS reason,
+      CASE WHEN ? = 1 THEN coalesce(i.version, 0) END AS intention_version
     FROM members m
     LEFT JOIN intentions i ON i.member_id = m.id AND i.event_id = ?
     LEFT JOIN presence p ON p.member_id = m.id AND p.event_id = ?
     WHERE m.status = 'active' OR i.member_id IS NOT NULL OR p.member_id IS NOT NULL
     ORDER BY m.instrument, m.voice, m.name
-  `).all(member.role, member.role, member.role, id, id);
+  `).all(management, management, management, id, id);
   const attachments = await db.prepare('SELECT id, name, length(content) AS bytes FROM files WHERE event_id = ?').all(id);
   return { event: { ...event, intention: 'unset', reason: '', intention_version: 0, ...own }, roster, attachments };
 }
@@ -162,7 +163,7 @@ export async function cancelEvent(db, actor, id, version) {
 
 export async function saveIntention(db, actor, eventId, memberId, input) {
   const correction = actor.id !== memberId;
-  requireThat(!correction || actor.role === 'director', 403, 'Solo dirección puede corregir respuestas.');
+  requireThat(!correction || canManage(actor.role), 403, 'Tu perfil no puede corregir respuestas ajenas.');
   const value = choice(input.value, ['yes','no','unset'], 'Intención');
   const suppliedReason = value === 'no' ? text(input.reason, 500, 'Motivo') : '';
   const key = text(input.key, 80, 'Identificador de solicitud') || null;
@@ -180,7 +181,7 @@ export async function saveIntention(db, actor, eventId, memberId, input) {
     }
     if (!correction) requireThat(!event.cancelled && event.starts > now(), 409,
       'La convocatoria ya ha empezado o está cancelada.', 'closed');
-    requireThat(version === input.version, 409, 'La respuesta cambió desde otro dispositivo o por dirección.', 'conflict');
+    requireThat(version === input.version, 409, 'La respuesta se ha modificado desde que la abriste.', 'conflict');
     if (current?.value === value && current.reason === reason) return { value, reason, version };
     await db.prepare(`
       INSERT INTO intentions VALUES (?, ?, ?, ?, ?, ?, ?, ?)

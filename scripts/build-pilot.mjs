@@ -28,7 +28,7 @@ await Promise.all([
   mkdir(join(shared,'src'),{ recursive:true }),
 ]);
 const src = ['access.js','connection.js','events.js','google.js','main.js','management.js','push.js',
-  'repertoire.js','report.js','storage.js','styles.css','theme.js','time.js','ui.js'];
+  'repertoire.js','report.js','roles.js','storage.js','styles.css','theme.js','time.js','ui.js'];
 const assets = ['escudo.png','icon-192.png','icon-512.png','google-g.png','inter.woff2','cinzel.woff2',
   'inter-LICENSE.txt','cinzel-LICENSE.txt'];
 const domain = ['account-mail','api','events','formations','google','http','music','push','security','store'];
@@ -46,7 +46,7 @@ await Promise.all([
   ...domain.map(file => cp(join('server',file + '.mjs'),join(shared,'server',file + '.mjs'))),
   ...['index.mjs','handler.mjs','deno.json'].map(file => cp(join('deployment','edge',file),join(functionDir,file))),
   cp(join('deployment','edge','config.toml'),join(projectDir,'supabase','config.toml')),
-  cp(join('src','time.js'),join(shared,'src','time.js')),
+  ...['roles.js','time.js'].map(file => cp(join('src',file),join(shared,'src',file))),
   writeFile(join(functionDir,'site.mjs'),'export const defaultSite = ' + JSON.stringify(pages.href) + ';\n'),
   writeFile(join(projectDir,'schema.sql'),'BEGIN;\nSELECT pg_advisory_xact_lock(741697124518);\n' + sql + '\nCOMMIT;\n'),
   writeFile(join(siteDir,'src','runtime.js'), 'export const apiBase = ' + JSON.stringify(edge.href + '/api') + ';\n'),
