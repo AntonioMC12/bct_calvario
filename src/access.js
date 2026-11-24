@@ -1,4 +1,5 @@
 import { back, bindForm, button, errorRegion, esc, field, header, link } from './ui.js';
+import { bindGoogle, googleButton, googleRegistration } from './google.js';
 
 export const mailRoutes = ['recuperar','restablecer','verificar'];
 const emailField = () => field('email','Correo electrónico','type="email" required autocomplete="email" maxlength="254"');
@@ -83,8 +84,21 @@ export function access(shell, ctx, route, id) {
     shell.querySelector('h1').focus({ preventScroll:true });
     return;
   }
+  const google = !member && !ctx.state.offline && ctx.state.google;
+  const federated = google ? '<form class="stack google-access" id="google-form">' + errorRegion +
+    googleButton('Continuar con Google') + '</form>' : '';
   shell.innerHTML = accessFrame(member && member.status !== 'active' ? accountStatus(member) :
-    accessForm(requesting,ctx.state.offline));
+    accessForm(requesting,ctx.state.offline) + federated);
+  if (google) bindGoogle(shell.querySelector('#google-form'),google,async idToken => {
+    try {
+      await ctx.api('/auth/google','POST',{ mode:'login',idToken });
+      history.replaceState(null,'','#/inicio');
+      await ctx.bootstrap();
+    } catch (error) {
+      if (error.code !== 'profile_required') throw error;
+      googleRegistration(shell.querySelector('.access-panel'),ctx,idToken);
+    }
+  });
   shell.querySelector('#retry')?.addEventListener('click',ctx.bootstrap);
   shell.querySelector('#signout')?.addEventListener('click',() => ctx.logout().catch(error => ctx.toast(error.message)));
   const resend = shell.querySelector('#resend-link');

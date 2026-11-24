@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { body, choice, HttpError, json, requireThat, text } from './http.mjs';
-import { checkPassword, endSession, expiredCookie, getMember, hashPassword, startSession } from './security.mjs';
+import { checkPassword, endSession, expiredCookie, getMember, hashPassword, startSession, tokenHash } from './security.mjs';
 import { audit, calendarFile, cancelEvent, eventById, eventDetail, eventList, managers, notify, saveEvent, saveIntention, savePresence, sendDueReminders } from './events.mjs';
 import { catalog, createWork, servePdf, approveScore, uploadPdf } from './music.mjs';
 import { formation, saveFormation, saveTemplate } from './formations.mjs';
 import { transaction } from './db.mjs';
 import { createAccountMail } from './account-mail.mjs';
+import { authenticateWithGoogle } from './google.mjs';
+import { subscribe, unsubscribe } from './push.mjs';
 
 const directors = ['director'];
 const admins = ['admin'];
@@ -60,7 +62,7 @@ function dashboard(db, member) {
   return { member, events: eventList(db, member), notices, works: catalog(db, member), updatedAt: now() };
 }
 
-export function createApi(db, { sendMail, accountClock } = {}) {
+export function createApi(db, { sendMail, accountClock, google, push } = {}) {
   const dummyHash = hashPassword(randomUUID());
   const accountMail = createAccountMail(db, sendMail, { now: accountClock });
   const attempts = new Map();
@@ -85,7 +87,8 @@ export function createApi(db, { sendMail, accountClock } = {}) {
     }
 
     if (method === 'GET' && pathname === '/api/session') {
-      return json(response, 200, { member: publicAccount(member) });
+      return json(response, 200, { member: publicAccount(member), google: google?.config ?? null,
+        pushEnabled: Boolean(push) });
     }
 
     if (method === 'POST' && pathname === '/api/logout') {
@@ -94,11 +97,19 @@ export function createApi(db, { sendMail, accountClock } = {}) {
       return json(response, 200, {}, { 'Set-Cookie': expiredCookie(secure) });
     }
 
+    if (method === 'POST' && pathname === '/api/auth/google') {
+      rateLimit(request, 'google', 20, 60000);
+      const result = await authenticateWithGoogle(db,google,request,await body(request),secure);
+      return json(response,200,{ linked:Boolean(result.linked) },result.cookie ? { 'Set-Cookie':result.cookie } : {});
+    }
+
     if (method === 'POST' && ['/api/account/forgot','/api/account/resend','/api/account/verify','/api/account/reset'].includes(pathname)) {
       const input = await body(request);
       if (pathname === '/api/account/forgot') {
         rateLimit(request, 'technical-mail', 8, 300000);
-        const recipient = db.prepare("SELECT id, email FROM members WHERE email = ? AND status IN ('active','pending')").get(email(input.email));
+        const recipient = db.prepare(`
+          SELECT id, email FROM members WHERE email = ? AND status IN ('active','pending') AND password_enabled = 1
+        `).get(email(input.email));
         if (recipient) accountMail.issue(recipient, 'reset', expectedOrigin);
         return json(response, 202, {});
       }
@@ -138,7 +149,7 @@ export function createApi(db, { sendMail, accountClock } = {}) {
         requireThat(inserted.changes, 409, 'Ya existe una cuenta con este correo. Prueba a iniciar sesión.');
         accountMail.issue({ id, email: address }, 'verify', expectedOrigin);
       } else {
-        const match = db.prepare('SELECT id, password FROM members WHERE email = ?').get(address);
+        const match = db.prepare('SELECT id, password FROM members WHERE email = ? AND password_enabled = 1').get(address);
         const valid = await checkPassword(secret, match?.password ?? await dummyHash);
         requireThat(valid && match, 401, 'El correo o la contraseña son incorrectos.');
         id = match.id;
@@ -171,6 +182,22 @@ export function createApi(db, { sendMail, accountClock } = {}) {
     }
 
     if (method === 'GET' && pathname === '/api/dashboard') return json(response, 200, dashboard(db, member));
+
+    if (pathname === '/api/push') {
+      requireThat(push,404,'Los avisos push todavía no están configurados.');
+      if (method === 'GET') {
+        const devices = db.prepare('SELECT id FROM push_subscriptions WHERE session_token = ?').all(tokenHash(request));
+        return json(response,200,{ publicKey:push.publicKey, bindings:devices.map(device => device.id) });
+      }
+      if (method === 'POST') {
+        const input = await inputFor();
+        return json(response,200,subscribe(db,member,tokenHash(request),input));
+      }
+      if (method === 'DELETE') {
+        unsubscribe(db,tokenHash(request),await inputFor());
+        return json(response,200,{});
+      }
+    }
 
     if (method === 'GET' && pathname === '/api/management') {
       requireThat(managers.includes(member.role), 403, 'Tu perfil no puede consultar los contactos.');

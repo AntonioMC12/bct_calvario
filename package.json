@@ -1,6 +1,6 @@
 {
   "name": "bct-calvario",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "Aplicación de gestión de la banda Calvario",
@@ -17,6 +17,8 @@
     "test": "node --test"
   },
   "dependencies": {
-    "nodemailer": "10.6.1"
+    "firebase-admin": "14.5.1",
+    "nodemailer": "10.6.1",
+    "web-push": "4.0.0"
   }
 }

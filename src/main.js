@@ -1,10 +1,12 @@
-import { back, bindForm, button, displayTime, empty, errorRegion, esc, eventCard, fullDate, header, icon,
+import { back, bindForm, button, displayTime, empty, errorRegion, esc, eventCard, field, fullDate, header, icon,
   initials, instrument, intention, link, matchesScore, pill, presence, role, row, sectionTitle, segment } from './ui.js';
 import { cacheDashboard, clearLocalSignout, clearPrivate, getLocal, localSignoutPending, markLocalSignout, savePending, savedFiles } from './storage.js';
 import { calendar, eventPage } from './events.js';
 import { repertoire, downloads } from './repertoire.js';
 import { management, eventEditor, formationEditor, composeNotice } from './management.js';
 import { access, mailRoutes } from './access.js';
+import { bindGoogle, googleButton } from './google.js';
+import { clearPush, pushSettings } from './push.js';
 
 const shell = document.querySelector('#shell');
 const dialog = document.querySelector('#dialog');
@@ -60,6 +62,7 @@ async function reset(member = null) {
   state.saved = new Set();
   state.cacheReady = false;
   await clearPrivate();
+  await clearPush().catch(() => {});
 }
 
 function networkFailure(error) {
@@ -103,7 +106,8 @@ async function restore() {
       await api('/logout', 'POST', {});
       clearLocalSignout();
     }
-    const { member } = await api('/session');
+    const { member, google, pushEnabled } = await api('/session');
+    Object.assign(state,{ google,pushEnabled });
     state.offline = false;
     local = getLocal();
     if (!member || member.status !== 'active' || (local.account && local.account !== member.id)) await reset(member);
@@ -305,11 +309,30 @@ function profile(content, mode) {
     return;
   }
   if (mode === 'descargas') return downloads(content, context);
+  if (mode === 'google') {
+    content.innerHTML = back('Perfil','#/perfil') + header('Acceso con Google') +
+      (member.google_linked ? empty('Tu cuenta de Calvario ya está vinculada con Google.') :
+        state.google && !state.offline && member.password_enabled
+        ? '<form class="card stack"><p>Confirma tu contraseña y selecciona en Google el mismo correo de tu cuenta.</p>' +
+          field('password','Contraseña de Calvario','type="password" required maxlength="128" autocomplete="current-password"') +
+          errorRegion + googleButton('Vincular cuenta de Google') + '</form>'
+        : empty('La vinculación necesita conexión y una cuenta de Calvario con contraseña.'));
+    const form = content.querySelector('form');
+    if (form) bindGoogle(form,state.google,async (idToken,input) => {
+      await api('/auth/google','POST',{ mode:'link',idToken,password:input.password });
+      await refresh();
+      profile(content,'google');
+      toast('Cuenta de Google vinculada.');
+    });
+    return;
+  }
   content.innerHTML = header('Mi perfil') + '<section class="card profile-card"><span class="avatar large">' + initials(member.name) +
     '</span><div><h2>' + esc(member.name) + '</h2><p class="muted">' + instrument(member) +
     '</p>' + (member.email ? '<p class="muted">' + esc(member.email) + '</p>' : '') + pill(role[member.role]) + '</div></section>' +
     '<div class="row-list">' + row('Mi historial','Intención y presencia','#/perfil/historial','clock') +
     row('Descargas', state.saved.size + ' partituras guardadas','#/perfil/descargas','file') +
+    (state.pushEnabled ? row('Notificaciones','Avisos en este dispositivo','#/perfil/notificaciones','avisos') : '') +
+    (state.google ? row('Acceso con Google',member.google_linked ? 'Cuenta vinculada' : 'Vincular cuenta','#/perfil/google','perfil') : '') +
     (!state.offline && member.role !== 'musician' ? row('Gestión','Herramientas de tu perfil','#/gestion','gestion') : '') + '</div>' +
     '<div class="actions">' + button('Actualizar datos','secondary','id="retry"') + button('Cerrar sesión','secondary','id="signout"') + '</div>';
   content.querySelector('#retry').addEventListener('click', bootstrap);
@@ -360,6 +383,7 @@ async function render() {
     else if (route === 'calendario') await eventPage(content, context, id, action);
     else if (route === 'repertorio') repertoire(content, context, id);
     else if (route === 'avisos') bindNotices(content, id);
+    else if (route === 'perfil' && id === 'notificaciones') await pushSettings(content,context);
     else if (route === 'perfil') profile(content, id);
     else if (route === 'gestion' && id === 'aviso') composeNotice(content, context);
     else if (route === 'gestion') await management(content, context, id);

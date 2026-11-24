@@ -27,14 +27,15 @@ export function startSession(db, memberId, secure = false) {
   return cookie(token,secure) + '; Max-Age=' + LIFETIME;
 }
 
-function tokenHash(request) {
+export function tokenHash(request) {
   const match = request.headers.cookie?.match(/(?:^|;\s*)calvario_session=([0-9a-f]{64})(?:;|$)/);
   return match ? digest(match[1]) : '';
 }
 
 export function getMember(db, request) {
   return db.prepare(`
-    SELECT m.id, email, name, instrument, voice, role, status, email_verified_at, requires_email_verification
+    SELECT m.id, email, name, instrument, voice, role, status, email_verified_at, requires_email_verification,
+      password_enabled, EXISTS (SELECT 1 FROM google_identities g WHERE g.member_id = m.id) AS google_linked
     FROM sessions s JOIN members m ON m.id = s.member_id WHERE s.token = ? AND s.expires > ?
   `).get(tokenHash(request), Date.now());
 }

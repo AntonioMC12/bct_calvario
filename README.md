@@ -1,6 +1,6 @@
 # Calvario
 
-PWA para la Banda de Cornetas y Tambores Santísimo Cristo del Calvario. La versión 0.3 añade la confirmación de correo para altas nuevas y la recuperación de contraseña al núcleo de convocatorias, asistencia, avisos, formaciones y partituras privadas.
+PWA para la Banda de Cornetas y Tambores Santísimo Cristo del Calvario. La versión 0.4 incorpora acceso con Google y Web Push configurables, además de la recuperación de contraseña, asistencia, avisos, formaciones y partituras privadas.
 
 ## Probar con datos ficticios
 
@@ -46,6 +46,21 @@ El enlace de confirmación caduca en 24 horas. Desde **¿Has olvidado la contras
 
 Para preparar una instancia de piloto, usa `.env.example` como referencia. Configura `CALVARIO_PUBLIC_ORIGIN` con el origen HTTPS, `CALVARIO_SMTP_URL` con la conexión al proveedor y `CALVARIO_MAIL_FROM` con el remitente. El proxy debe terminar TLS y pasar la cabecera `Host` del origen público al servidor local. Arranca con `node --env-file=.env scripts/serve.mjs`. `smtp://` exige STARTTLS y `smtps://` usa TLS desde el inicio. La demo escribe siempre en archivos de prueba.
 
+## Activar el acceso con Google
+
+1. Registra una aplicación web en un proyecto de Firebase. En Authentication, activa Google en Métodos de inicio de sesión y autoriza el dominio de Calvario. Añade también `localhost` al proyecto de pruebas si vas a usarlo en ese equipo.
+2. Pon el `projectId`, la `apiKey` pública y el `appId` de la aplicación web en las variables `CALVARIO_FIREBASE_*` de `.env`. El navegador usa el dominio de autenticación estándar del proyecto.
+3. Da al servidor credenciales de aplicación de Google para ese proyecto. En desarrollo, puedes apuntar `GOOGLE_APPLICATION_CREDENTIALS` a un archivo privado fuera del repositorio. El servidor verifica la firma, el proyecto y el estado de revocación de la identidad antes de abrir una sesión de Calvario.
+4. Arranca con `node --env-file=.env scripts/serve.mjs`. Para probar con los datos ficticios, usa `node --env-file=.env scripts/demo.mjs`.
+
+Quien ya tenga cuenta inicia sesión con su contraseña y vincula el mismo correo desde **Perfil → Acceso con Google**. Quien use Google por primera vez completa nombre e instrumento y solicita acceso. Administración o dirección sigue aprobando las altas y las cuentas de baja conservan el bloqueo. La recuperación por correo de Calvario se aplica a sus cuentas con contraseña.
+
+## Activar Web Push
+
+Genera un par de claves VAPID con `npx --no-install web-push generate-vapid-keys --json`. Guarda ambas claves y un contacto `mailto:` en las variables `CALVARIO_PUSH_*` del servidor. Usa HTTPS en el piloto. El miembro elige **Perfil → Notificaciones → Activar en este dispositivo**. En iPhone y iPad, debe abrir Calvario desde la pantalla de inicio.
+
+El servidor registra el aviso y encola su envío a las sesiones suscritas. El texto visible dice que hay un aviso nuevo en Calvario, sin mostrar los detalles de la convocatoria en la pantalla bloqueada. La lectura se confirma en la bandeja. Al cerrar sesión se retira la suscripción de esa sesión y, cuando caduca, hay que activar de nuevo los avisos. La demo deja desactivado el envío push real.
+
 ## Probar sin conexión
 
 Abre la aplicación con una cuenta activa y deja que el navegador instale el service worker. Guarda una partitura desde Repertorio para consultarla luego en Perfil → Descargas. Desactiva la conexión, vuelve a abrir la app y responde a un evento futuro. La respuesta aparece como pendiente hasta que el servidor la acepta. Si la convocatoria se cierra o la respuesta ha cambiado, se conserva el cambio local para revisión.
@@ -70,4 +85,4 @@ Las pruebas cubren migraciones, permisos, alta, recuperación, validaciones, asi
 - `public/` contiene el escudo original, los iconos derivados y las fuentes Inter y Cinzel con sus licencias OFL.
 - `docs/development.md` registra cobertura, pruebas y decisiones. `AGENTS.md` orienta las siguientes sesiones.
 
-Quedan por probar un proveedor SMTP real y el proxy del piloto. El acceso con Google, las notificaciones push y los demás pendientes se detallan en el seguimiento.
+Queda validar el proxy y los proveedores reales de correo, Google y push en los dispositivos del piloto. Los demás pendientes se detallan en el seguimiento.

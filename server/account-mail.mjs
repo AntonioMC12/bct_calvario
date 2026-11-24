@@ -46,6 +46,7 @@ export function createAccountMail(db, sendMail, { now = Date.now } = {}) {
     const row = db.prepare(`
       SELECT m.id FROM account_tokens t JOIN members m ON m.id = t.member_id
       WHERE t.digest = ? AND t.purpose = ? AND t.expires > ? AND m.status IN ('active','pending')
+        AND m.password_enabled = 1
     `).get(digest(token), purpose, now());
     requireThat(row, 422, 'El enlace es inválido o ha caducado.');
     return row.id;

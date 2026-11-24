@@ -5,13 +5,15 @@ import { openDatabase } from '../server/db.mjs';
 import { createApi } from '../server/api.mjs';
 import { sendDueReminders } from '../server/events.mjs';
 import { createMail } from '../server/mail.mjs';
+import { configureGoogle } from '../server/google.mjs';
+import { configurePush, createPushWorker } from '../server/push.mjs';
 
 const types = {
   html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8',
-  css: 'text/css; charset=utf-8', png: 'image/png', woff2: 'font/woff2',
+  css: 'text/css; charset=utf-8', png: 'image/png', woff2: 'font/woff2', svg: 'image/svg+xml',
   webmanifest: 'application/manifest+json',
 };
-const assetRoute = /^\/(?:src\/[\w-]+\.(?:js|css)|public\/[\w-]+\.(?:png|woff2)|sw\.js|manifest\.webmanifest)$/;
+const assetRoute = /^\/(?:src\/[\w-]+\.(?:js|css)|public\/[\w-]+\.(?:png|woff2|svg)|sw\.js|manifest\.webmanifest)$/;
 
 function configuredOrigin(value) {
   if (!value) return null;
@@ -24,16 +26,24 @@ function configuredOrigin(value) {
   throw new Error('CALVARIO_PUBLIC_ORIGIN debe contener solo el origen HTTPS de Calvario.');
 }
 
-export function createAppServer(db, { sendMail = createMail(), accountClock, publicOrigin } = {}) {
-  const api = createApi(db, { sendMail, accountClock });
+export function createAppServer(db, { sendMail = createMail(), accountClock, publicOrigin, google, push } = {}) {
+  const api = createApi(db, { sendMail, accountClock, google, push });
   const external = configuredOrigin(publicOrigin);
+  const authDomain = google?.config.authDomain;
+  const googleSources = authDomain
+    ? "script-src 'self' https://www.gstatic.com https://apis.google.com; " +
+      "frame-src https://" + authDomain + " https://apis.google.com https://accounts.google.com; " +
+      "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://" + authDomain + "; "
+    : "script-src 'self'; ";
   return createServer(async (request, response) => {
     const host = request.headers.host?.toLowerCase() ?? '';
     if (external ? host !== external.host : !/^(localhost|127\.0\.0\.1)(?::\d+)?$/.test(host)) {
       return response.writeHead(421).end();
     }
     const expectedOrigin = external?.origin ?? 'http://' + host;
-    response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+    response.setHeader('Content-Security-Policy', "default-src 'self'; " + googleSources +
+      "style-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+    if (authDomain) response.setHeader('Cross-Origin-Opener-Policy','same-origin-allow-popups');
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Referrer-Policy', 'no-referrer');
 
@@ -72,8 +82,15 @@ export function start(filename, { demo = false } = {}) {
     throw new Error('Configura el correo SMTP para un origen público.');
   }
   const sendMail = createMail({ demo });
+  const google = configureGoogle();
+  const push = demo ? null : configurePush();
   const db = openDatabase(filename);
-  const server = createAppServer(db, { sendMail, publicOrigin });
+  const server = createAppServer(db, { sendMail, publicOrigin, google, push });
+  const pushWorker = push && createPushWorker(db,push.deliver);
+  const pushTimer = pushWorker && setInterval(() => {
+    pushWorker.drain().catch(() => console.error('No se pudo procesar la cola de notificaciones.'));
+  },5000);
+  pushTimer?.unref?.();
   const timer = setInterval(() => {
     try {
       sendDueReminders(db);
@@ -84,6 +101,7 @@ export function start(filename, { demo = false } = {}) {
   timer.unref();
   server.on('close', () => {
     clearInterval(timer);
+    clearInterval(pushTimer);
     db.close();
   });
   return server.listen(port, '127.0.0.1', () => console.log('Calvario · http://localhost:' + port));

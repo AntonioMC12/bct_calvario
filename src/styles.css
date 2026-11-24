@@ -203,6 +203,9 @@ summary { cursor: pointer; min-height: 36px; font-weight: 650; }
 .access-panel > .muted { margin-bottom: 1rem; }
 .access-panel .callout { margin-bottom: 1rem; }
 .access-footer { display: flex; align-items: center; flex-wrap: wrap; gap: .3rem; margin-top: .7rem; color: var(--stone); font-size: .89rem; }
+.google-access { margin-top: 1rem; }
+.button.google-button { justify-content: center; gap: .7rem; color: #1f1f1f; background: #fff; border-color: #747775; font-size: .875rem; }
+.google-button img { width: 18px; height: 18px; object-fit: contain; }
 .loading { padding: 2rem; text-align: center; color: var(--stone); }
 dialog { width: min(calc(100vw - 2rem), 480px); max-height: 80vh; border: 1px solid var(--line); border-radius: 22px; background: var(--surface); color: var(--ink); padding: 1.5rem; }
 dialog::backdrop { background: #0b0b0b80; }

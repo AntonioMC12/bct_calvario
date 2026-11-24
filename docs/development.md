@@ -1,5 +1,12 @@
 # Seguimiento del desarrollo
 
+## 2026-11-24 · Google y Web Push v0.4
+
+- RF01–RF04 y RF41. Firebase Authentication verifica el acceso con Google. SQLite conserva el rol, el estado y el historial. Las cuentas existentes se vinculan solo tras confirmar su contraseña y seleccionar el mismo correo. Las altas nuevas completan su solicitud y pasan por aprobación. Las cuentas de baja no reciben sesión de Google.
+- RF33–RF36. Cada dispositivo opta por push desde su perfil. La migración 003 añade las identidades y una cola persistente con reintentos. El aviso se escribe junto con la cola y sigue consultable si falla el envío. El texto de pantalla bloqueada es genérico. El cierre o la caducidad de la sesión retiran la suscripción y la lectura se confirma en la bandeja. Las copias de seguridad conservan identidades, pero limpiar sesiones también retira suscripciones y trabajos en cola.
+- El SDK web de Firebase se carga desde su CDN solo cuando está configurado. El SDK Admin verifica las credenciales en servidor. `web-push` prepara el envío VAPID. Las dos integraciones son opcionales y los datos de la banda siguen en SQLite.
+- Pasaron 16 pruebas automatizadas. En Chrome, con el proveedor simulado, se comprobó la vinculación, la entrada con Google, el alta y la baja de una suscripción push y la presentación del aviso por el service worker. Quedan por activar el proveedor de Google en un proyecto real, probar el envío Web Push en dispositivos físicos y validar el flujo de vinculación con dirección.
+
 ## 2026-11-23 · Correo técnico y acceso v0.3
 
 - RF01–RF04. El alta nueva por contraseña requiere confirmar su correo antes de la aprobación. La migración SQLite 002 conserva el acceso y las solicitudes de v0.2. El correo verificado acredita el buzón y la aprobación sigue siendo tarea de administración o dirección.

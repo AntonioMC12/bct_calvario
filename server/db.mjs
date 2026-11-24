@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-const migrations = ['./schema.sql', './migrations/002-account-mail.sql'];
+const migrations = ['./schema.sql', './migrations/002-account-mail.sql', './migrations/003-integrations.sql'];
 
 export function openDatabase(filename = process.env.CALVARIO_DB || 'data/calvario.sqlite') {
   if (filename !== ':memory:') mkdirSync(dirname(resolve(filename)), { recursive: true });

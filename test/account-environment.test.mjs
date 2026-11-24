@@ -25,7 +25,7 @@ test('la migración conserva las membresías activas y las solicitudes de v1', a
     insert.run('b','b@ejemplo.invalid','Solicitante','pending');
     db.close();
     db = openDatabase(filename);
-    assert.equal(db.prepare('PRAGMA user_version').get().user_version,2);
+    assert.equal(db.prepare('PRAGMA user_version').get().user_version,3);
     const rows = db.prepare('SELECT status, email_verified_at, requires_email_verification FROM members ORDER BY id').all();
     assert.deepEqual(rows.map(row => [row.status,row.email_verified_at,row.requires_email_verification]),
       [['active',null,0],['pending',null,0]]);
