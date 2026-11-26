@@ -5,7 +5,7 @@ import { pdfContent } from './management.js';
 import { canManage } from './roles.js';
 import { optionLists } from './part-options.js';
 
-let scope = 'mine';
+let scope = 'all';
 let query = '';
 let genre = '';
 const canManageScores = state => !state.offline && canManage(state.member.role);
@@ -42,28 +42,32 @@ export function repertoire(content, ctx, id, action) {
   const genreControl = content.querySelector('[name="genre"]');
   const tabs = content.querySelector('.segments');
   const list = content.querySelector('#works');
-  const visible = () => state.data.works.filter(work => (currentScope() === 'all' ?
-    work.scores.some(file => !file.archived && (file.approved || canManageScores(state))) :
-    work.scores.some(file => matchesScore(file,state.member))) &&
-    (!genre || genre === work.genre) && normalize(work.title + ' ' + work.authors + ' ' + work.genre).includes(normalize(query)));
+  const byPart = new Intl.Collator('es',{ numeric:true, sensitivity:'base' }).compare;
+  const visible = () => state.data.works
+    .filter(work => (!genre || genre === work.genre) &&
+      normalize(work.title + ' ' + work.authors + ' ' + work.genre).includes(normalize(query)))
+    .map(work => ({ ...work, scores:work.scores.filter(file => currentScope() === 'all' ?
+      !file.archived && (file.approved || canManageScores(state)) : matchesScore(file,state.member))
+      .sort((a,b) => byPart(a.instrument,b.instrument) || byPart(a.voice,b.voice) || byPart(a.name,b.name)) }))
+    .filter(work => work.scores.length);
 
   function show() {
     const works = visible();
+    const openWorks = new Set([...list.querySelectorAll('details[open]')].map(card => card.dataset.work));
+    if (!list.hasChildNodes() && works.length) openWorks.add(works[0].id);
     const part = instrument(state.member);
     const scopeHint = content.querySelector('#catalog-part');
     scopeHint.hidden = currentScope() !== 'mine' || !part;
     scopeHint.innerHTML = part ? '<span class="tile">' + icon('repertorio') +
       '</span><div><p class="eyebrow">Tu atril</p><strong>' + part + '</strong></div>' : '';
-    list.innerHTML = works.length ? [...Map.groupBy(works,work => work.genre || 'Sin género')].map(([group,items]) =>
-      '<section class="stack catalog-group">' + sectionTitle(group) + '<div class="catalog-grid">' + items.map(work => {
-        const preferred = work.scores.find(file => matchesScore(file,state.member));
-        const file = preferred ?? (currentScope() === 'all' ? work.scores.find(file => !file.archived) : undefined);
-        return '<article class="card stack catalog-work"><div class="member-heading"><span class="tile">' + icon('repertorio') +
-          '</span><div><h3>' + esc(work.title) + '</h3><p class="muted">' +
-          [work.authors,work.genre].filter(Boolean).map(esc).join(' · ') + '</p></div></div>' +
-          (file ? scoreRow(file,ctx) : '') + '<a class="button quiet event-action" href="#/repertorio/' + esc(work.id) +
-          '">Ver obra' + icon('right') + '</a></article>';
-      }).join('') + '</div></section>').join('') :
+    list.innerHTML = works.length ? works.map(work =>
+      '<details class="card catalog-work" data-work="' + esc(work.id) + '"' + (openWorks.has(work.id) ? ' open' : '') +
+      '><summary class="catalog-work-summary"><span class="tile">' + icon('repertorio') + '</span>' +
+      '<span class="catalog-work-heading"><strong>' + esc(work.title) + '</strong><span class="muted">' +
+      [work.authors,work.genre].filter(Boolean).map(esc).join(' · ') + '</span></span>' +
+      '<span class="catalog-work-count">' + work.scores.length + (work.scores.length === 1 ? ' partitura' : ' partituras') +
+      icon('right') + '</span></summary><div class="catalog-work-files">' + work.scores.map(file => scoreRow(file,ctx)).join('') + '</div>' +
+      actionLink('Ver obra','#/repertorio/' + work.id) + '</details>').join('') :
       empty(query || genre ? 'No hay obras que coincidan con la búsqueda.' :
         currentScope() === 'mine' ? 'Aún no hay partituras para tu instrumento y voz.' : 'El catálogo aún no tiene partituras disponibles.');
     bindScores(list,ctx,works.flatMap(work => work.scores),show);

@@ -2,6 +2,11 @@
 
 El [estado y los pendientes de Calvario](estado-y-pendientes.md) recoge la cobertura actual y los requisitos añadidos el 26 de noviembre de 2026. Las entradas siguientes conservan el historial de cada entrega.
 
+## 2026-11-26 · Repertorio desplegable por obras
+
+- Cada obra tiene una ficha desplegable con título, autoría y recuento de las partituras visibles. Las partes aparecen ordenadas por instrumento y voz. Dirección abre el catálogo completo por defecto y puede volver a «Mis partituras». El repertorio del músico mantiene el filtro de instrumento y voz. La ficha «Ver obra» permite consultar el detalle y, para Dirección, el historial de versiones.
+- Se comprobó una obra ficticia con tres partes a 320, 512 y 1280 px, la apertura con teclado y el guardado sin conexión dentro de la ficha. Con una cuenta de músico solo se mostró su parte. Pasaron `npm run check` y las 29 pruebas. La caché de la PWA pasa a `v21`.
+
 ## 2026-11-26 · Legibilidad de Asistentes y Repertorio
 
 - Asistentes muestra los filtros en dos columnas en móvil, con el recuento separado de la etiqueta. En Repertorio, las fichas de partitura reservan una fila completa para el instrumento, la voz y el estado y sitúan los botones debajo. Se comprobaron los filtros y el buscador de asistentes, y el ancho de las fichas a 320, 512 y 1280 px. Pasaron `npm run check` y las 29 pruebas. La caché pasa a `v20`.
