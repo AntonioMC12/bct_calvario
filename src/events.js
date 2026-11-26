@@ -198,9 +198,12 @@ function attendees(content, members, showSummary) {
   const totals = Map.groupBy(members, member => member.intention);
   let mode = 'all';
   content.insertAdjacentHTML('beforeend', '<div class="stack">' +
-    segment('Filtrar asistentes',filters.map(([value,label]) => [value,label + ' · ' +
-      (value === 'all' ? members.length : totals.get(value)?.length ?? 0)]),mode) +
-    field('query','Buscar componente','type="search" autocomplete="off"') + '<div id="roster" class="row-list"></div>' +
+    '<div class="segments attendee-filters" role="group" aria-label="Filtrar asistentes">' +
+    filters.map(([value,label]) => '<button type="button" data-value="' + value + '" aria-pressed="' + (value === mode) + '">' +
+      '<span>' + label + '</span> <span class="attendee-count">' +
+      (value === 'all' ? members.length : totals.get(value)?.length ?? 0) + '</span></button>').join('') + '</div>' +
+    field('query','Buscar componente','type="search" autocomplete="off" placeholder="Nombre o instrumento"') +
+    '<div id="roster" class="row-list attendee-roster"></div>' +
     (showSummary ? summary(members) : '') + '</div>');
   const search = content.querySelector('input');
   const groups = content.querySelector('.segments');
@@ -208,9 +211,12 @@ function attendees(content, members, showSummary) {
   function show() {
     const visible = members.filter(member => (member.intention === mode || mode === 'all') &&
       normalize(member.name + ' ' + member.instrument + ' ' + member.voice).includes(normalize(search.value)));
-    list.innerHTML = visible.length ? visible.map(member => '<div class="row"><div class="row-copy"><strong>' +
-      esc(member.name) + '</strong><span class="muted">' + instrument(member) + '</span></div>' +
-      pill(otherIntention[member.intention],member.intention === 'yes' ? 'good' : '') + '</div>').join('') : empty('No hay componentes con esos filtros.');
+    list.innerHTML = visible.length ? visible.map(member => {
+      const part = instrument(member);
+      return '<div class="row"><div class="row-copy"><strong>' + esc(member.name) + '</strong>' +
+        (part ? '<span class="muted">' + part + '</span>' : '') + '</div>' +
+        pill(otherIntention[member.intention],member.intention === 'yes' ? 'good' : '') + '</div>';
+    }).join('') : empty('No hay componentes con esos filtros.');
   }
   groups.onclick = event => {
     const chosen = event.target.closest('button');
