@@ -34,6 +34,7 @@ const paths = {
   compass: '<path d="m3 11 18-8-8 18-2-8z"/>',
   clipboard: '<rect x="5" y="5" width="14" height="16" rx="2"/><rect x="9" y="3" width="6" height="4" rx="1" fill="var(--surface, transparent)"/><path d="m9 14 2 2 4-5"/>',
   'check-ring': '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+  'cross-ring': '<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/>',
   up: '<path d="M12 20V4m-6 6 6-6 6 6"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/>',
   map: '<path d="M20 10c0 6-8 11-8 11S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>',
@@ -108,7 +109,7 @@ export function bindForm(form, submit) {
     form.dataset.busy = 'true';
     if (trigger) trigger.disabled = true;
     try {
-      await submit(Object.fromEntries(new FormData(form)), form);
+      await submit(Object.fromEntries(new FormData(form)), form, trigger);
     } catch (error) {
       if (feedback) {
         feedback.textContent = error.message;
@@ -126,9 +127,11 @@ export function attendanceBadge(value) {
   return pill(intention[value], tone[value] + ' status-dot');
 }
 
-export function eventCard(event, pending, { featured = false } = {}) {
+export function eventCard(event, pending, { featured = false, quick = false } = {}) {
   const location = [event.location,event.town].filter(Boolean).join(' · ');
-  const status = event.cancelled ? pill('Evento cancelado', 'accent') : attendanceBadge(event.intention);
+  const selected = pending && !pending.error ? pending.value : event.intention;
+  const status = event.cancelled ? pill('Evento cancelado', 'accent') : attendanceBadge(selected);
+  const options = [['yes','check-ring'],['no','cross-ring']];
   return '<article class="card event-card' + (featured ? ' event-featured' : '') + '"><div class="event-labels">' +
     pill(event.type,'event-kind' + (!featured ? event.type === 'Ensayo' ? ' waiting' : ' accent' : '')) + status + '</div>' +
     '<h3>' + esc(event.title) + '</h3>' +
@@ -137,6 +140,11 @@ export function eventCard(event, pending, { featured = false } = {}) {
     '<p>' + icon('clock') + '<span>' + fullDate(event.starts) + ' · ' + timeRange(event) + '</span></p>' +
     (location ? '<p>' + icon('map') + '<span>' + esc(location) + '</span></p>' : '') + '</div>' +
     (pending ? '<p class="muted">' + (pending.error ? 'Cambio sin enviar' : 'Pendiente de envío') + '</p>' : '') +
-    '<a class="button ' + (featured ? 'primary' : 'quiet') + ' event-action" href="#/calendario/' + esc(event.id) +
+    (quick ? '<form class="quick-attendance" data-rehearsal="' + esc(event.id) + '" aria-label="Asistencia a ' + esc(event.title) + '">' +
+      options.map(([value,glyph]) => '<button type="submit" class="button ' +
+        (selected === value || selected === 'unset' && value === 'yes' ? 'primary' : 'quiet') +
+        '" value="' + value + '" aria-pressed="' + (selected === value) + '">' + icon(glyph) + intention[value] + '</button>').join('') +
+      errorRegion + '</form>' : '') +
+    '<a class="button ' + (featured && !quick ? 'primary' : 'quiet') + ' event-action" href="#/calendario/' + esc(event.id) +
     '">Ver convocatoria' + icon(featured ? 'arrow' : 'right') + '</a></article>';
 }

@@ -35,7 +35,7 @@ const domain = ['account-mail','api','catalog-values','events','formations','goo
 const html = await readFile('index.html','utf8');
 const csp = "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; " +
   "style-src 'self'; img-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; " +
-  "frame-src https://*.firebaseapp.com https://apis.google.com https://accounts.google.com; " +
+  "frame-src https://www.google.com/maps https://*.firebaseapp.com https://apis.google.com https://accounts.google.com; " +
   "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseapp.com " + edge.origin;
 const [initialSql, rosterSql, managementSql] = await Promise.all([
   readFile('server/postgres/001-initial.sql','utf8'),

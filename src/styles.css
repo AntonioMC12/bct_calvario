@@ -154,7 +154,13 @@ svg { display: block; }
 :is(.home-view,.calendar-view) .section-head h2, :is(.event-attendance,.event-documents) h2 { display: flex; align-items: center; gap: .45rem; }
 :is(.home-view,.calendar-view) .section-head .icon, :is(.event-attendance,.event-documents) h2 .icon { color: var(--link); width: 18px; height: 18px; }
 .event-card { display: grid; gap: .65rem; }
-.event-featured { gap: .9rem; }
+.event-featured { gap: .9rem; border-top: 5px solid var(--red); }
+.home-rehearsal { margin-top: 1.25rem; }
+.quick-attendance, .event-location-actions { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,120px),1fr)); gap: .5rem; }
+.quick-attendance .button, .event-location-actions .button { justify-content: center; text-align: center; }
+.quick-attendance .icon, .event-location-actions .icon { width: 18px; height: 18px; }
+.quick-attendance .form-error { grid-column: 1 / -1; margin: 0; }
+.quick-attendance[data-busy] button { pointer-events: none; }
 .event-card + .event-card { margin-top: .65rem; }
 .event-card h3 { font-size: clamp(1.12rem, 1.03rem + .49vw, 1.42rem); }
 .event-featured h3 { font-size: clamp(1.25rem, 1.12rem + .68vw, 1.6rem); }
@@ -171,7 +177,10 @@ svg { display: block; }
 .event-card .button.quiet { color: var(--link); }
 .event-overview .page-head { margin: 0; align-items: flex-start; }
 .event-overview { background: linear-gradient(138deg,var(--surface) 73%,var(--inset)); }
-.event-overview .page-head h1 { font-size: clamp(1.7rem, 1.4rem + 1.2vw, 2.55rem); letter-spacing: -.035em; }
+.event-overview .page-head h1 { font: 750 clamp(1.55rem, 1.3rem + 1.2vw, 2.4rem)/1.2 var(--display); }
+.event-facts { display: grid; gap: .75rem; padding: .8rem; background: var(--inset); border-radius: 12px; }
+.event-map { display: block; width: 100%; height: clamp(200px, 45vw, 315px); border: 1px solid var(--line);
+  border-radius: 12px; background: var(--inset); }
 .event-overview .page-head .eyebrow { display: inline-block; padding: .25rem .6rem; border-radius: 2rem; background: var(--soft-red); color: var(--link); }
 .event-overview .button.quiet, .event-documents .button.quiet { justify-content: center; }
 .event-attendance .event-description { display: flex; align-items: flex-start; gap: .55rem; }

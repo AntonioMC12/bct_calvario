@@ -33,9 +33,9 @@ export function createAppServer(database, { sendMail = createMail(), accountCloc
   const authDomain = google?.config.authDomain;
   const googleSources = authDomain
     ? "script-src 'self' https://www.gstatic.com https://apis.google.com; " +
-      "frame-src https://" + authDomain + " https://apis.google.com https://accounts.google.com; " +
+      "frame-src https://www.google.com/maps https://" + authDomain + " https://apis.google.com https://accounts.google.com; " +
       "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://" + authDomain + "; "
-    : "script-src 'self'; ";
+    : "script-src 'self'; frame-src https://www.google.com/maps; ";
   return createServer(async (request, response) => {
     const host = request.headers.host?.toLowerCase() ?? '';
     if (external ? host !== external.host : !/^(localhost|127\.0\.0\.1)(?::\d+)?$/.test(host)) {

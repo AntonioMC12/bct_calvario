@@ -2,6 +2,12 @@
 
 El [estado y los pendientes de Calvario](estado-y-pendientes.md) recoge la cobertura actual y los requisitos añadidos el 26 de noviembre de 2026. Las entradas siguientes conservan el historial de cada entrega.
 
+## 2026-11-26 · Asistencia desde Inicio y mapa de la convocatoria
+
+- El próximo ensayo con respuestas abiertas permite indicar «Asistiré» o «No asistiré» directamente desde Inicio. Si antes hay otro evento, el ensayo tiene su propia tarjeta. Se reutilizan el guardado, la cola sin conexión y el cierre de respuestas de las convocatorias. El motivo opcional se edita en el detalle.
+- El detalle incorpora un mapa de Google Maps con el lugar y la localidad de la convocatoria, seguido de los accesos a Mapas y al archivo de calendario. El punto de encuentro permanece como indicación de texto. El mapa requiere conexión y la caché de la PWA pasa a `v16`.
+- Pasaron `npm run check` y las 29 pruebas de `npm test`. En la demo del navegador se enviaron ambas respuestas desde Inicio, se verificó la selección tras recargar y se comprobó que carga el mapa integrado.
+
 ## 2026-11-26 · Acceso adaptable y escudo de la banda
 
 - El acceso presenta la portada y el formulario apilados en móvil y en dos columnas desde 840 px. La portada muestra el escudo vectorial facilitado y el nombre completo «Banda de Cornetas y Tambores del Santísimo Cristo del Calvario».
