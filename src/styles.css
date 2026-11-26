@@ -173,7 +173,7 @@ svg { display: block; }
 .event-overview .info-line .tile { background: var(--ivory); color: var(--gold); }
 .event-action { min-height: 46px; width: 100%; }
 .event-action .icon { width: 18px; height: 18px; }
-.event-card .button.quiet, .event-attendance .button.primary { justify-content: space-between; }
+.event-card .event-action.quiet, .event-attendance .button.primary { justify-content: space-between; }
 .event-card .button.quiet { color: var(--link); }
 .event-overview .page-head { margin: 0; align-items: flex-start; }
 .event-overview { background: linear-gradient(138deg,var(--surface) 73%,var(--inset)); }
@@ -289,6 +289,12 @@ a.row:hover { background: var(--paper); }
 .notice-receipts { margin-top: 1rem; }
 .inbox-view .segments { width: 100%; max-width: 380px; }
 .catalog-tools { display: grid; gap: .8rem; max-width: 520px; }
+.catalog-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem 1rem; margin-bottom: 1rem; }
+.catalog-management { display: grid; flex: 1 1 20rem; max-width: 25rem;
+  grid-template-columns: repeat(auto-fit,minmax(min(100%,9.5rem),1fr)); gap: .55rem; }
+.catalog-management .button { min-height: 48px; gap: .45rem; border-radius: 12px; padding-inline: .7rem; text-align: center; }
+.catalog-management .icon { width: 18px; height: 18px; }
+.catalog-management .button.secondary .icon { color: var(--link); }
 .catalog-panel { margin-bottom: 1.15rem; }
 .catalog-filters { display: grid; grid-template-columns: minmax(0,1.6fr) minmax(125px,1fr); gap: .75rem; align-items: center; padding: .7rem .85rem; }
 .catalog-filters > label { grid-template-columns: auto minmax(0,1fr); align-items: center; }
