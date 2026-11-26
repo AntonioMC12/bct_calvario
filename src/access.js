@@ -1,5 +1,6 @@
 import { back, bindForm, button, errorRegion, esc, field, header, icon, link, pill } from './ui.js';
 import { bindGoogle, googleButton, googleRegistration } from './google.js';
+import { optionLists } from './part-options.js';
 
 export const mailRoutes = ['recuperar','restablecer','verificar'];
 const emailField = () => field('email','Correo electrónico','type="email" required autocomplete="email" maxlength="254"');
@@ -26,7 +27,7 @@ function accountStatus(member) {
     button('Cerrar sesión','secondary','id="signout"') + '</div>';
 }
 
-function accessForm(requesting, offline, mailEnabled) {
+function accessForm(requesting, offline, mailEnabled, values) {
   const password = requesting ? newPassword : 'type="password" required maxlength="128" autocomplete="current-password"';
   const tab = (title, href, glyph, active) => '<a href="' + href + '"' + (active ? ' aria-current="page"' : '') + '>' + icon(glyph) + title + '</a>';
   return (mailEnabled ? '<nav class="access-tabs" aria-label="Entrada a Calvario">' + tab('Acceso','#/inicio','perfil',!requesting) +
@@ -38,7 +39,8 @@ function accessForm(requesting, offline, mailEnabled) {
     emailField() + '<div class="password-field">' + field('password','Contraseña',password) +
     '<button type="button" class="text-link" id="show-password" aria-label="Mostrar contraseña" aria-pressed="false">' + icon('eye') + '</button></div>' +
     (requesting ? '<p class="muted">Usa una contraseña de al menos 12 caracteres.</p><div class="field-grid">' +
-      field('instrument','Instrumento','required maxlength="80"') + field('voice','Voz','maxlength="80"') + '</div>' :
+      field('instrument','Instrumento','required maxlength="80" list="instrument-options"') +
+      field('voice','Voz','maxlength="80" list="voice-options"') + '</div>' + optionLists(values) :
       (mailEnabled ? link('¿Has olvidado la contraseña?','#/recuperar') : '')) +
     errorRegion + button(requesting ? 'Enviar solicitud' : 'Entrar') + '</form>' +
     (mailEnabled ? '' : '<p class="muted access-help">Si necesitas una cuenta, solicita el alta a la dirección de la banda.</p>');
@@ -101,7 +103,7 @@ export function access(shell, ctx, route, id) {
   const federated = google ? '<form class="stack google-access" id="google-form">' + errorRegion +
     googleButton('Continuar con Google') + '</form>' : '';
   shell.innerHTML = accessFrame(member && member.status !== 'active' ? accountStatus(member) :
-    accessForm(requesting,ctx.state.offline,ctx.state.mailEnabled) + federated);
+    accessForm(requesting,ctx.state.offline,ctx.state.mailEnabled,ctx.state.catalogValues) + federated);
   if (google) bindGoogle(shell.querySelector('#google-form'),google,async idToken => {
     try {
       await ctx.api('/auth/google','POST',{ mode:'login',idToken });

@@ -2,15 +2,20 @@ import { area, back, bindForm, button, displayTime, empty, errorRegion, esc, fie
   link, normalize, options, otherIntention, pill, role, row, sectionTitle } from './ui.js';
 import { localMinute } from './time.js';
 import { canManage } from './roles.js';
+import { optionLists } from './part-options.js';
 
 const eventTypes = ['Ensayo','Actuación','Reunión','Procesión','Certamen','Concierto'];
 const manager = state => !state.offline && canManage(state.member.role);
 const accessStatus = { active:'Activo',pending:'Pendiente',rejected:'Rechazado',inactive:'De baja' };
 const eventRoute = id => '#/calendario/' + id;
+const membersRoute = '#/gestion/miembros';
+const editableMember = member => member.status === 'active' && member.role === 'musician';
 
 export function managementTools() {
   return '<div class="row-list">' + row('Solicitudes','Revisar nuevas incorporaciones','#/gestion/solicitudes','users') +
-    row('Directorio','Contactos y estado de acceso','#/gestion/miembros','perfil') +
+    row('Directorio','Miembros de la banda y cuentas de acceso',membersRoute,'perfil') +
+    row('Material','Inventario, préstamos y devoluciones','#/gestion/material','grid') +
+    row('Catálogo musical','Instrumentos, voces y géneros','#/gestion/catalogo','repertorio') +
     row('Eventos','Crear, editar y cancelar convocatorias','#/calendario','calendario') +
     row('Carga de partituras','Gestionar obras y subir PDF','#/repertorio/archivo','upload') +
     row('Formaciones','Selecciona una convocatoria','#/gestion/formaciones','grid') +
@@ -18,7 +23,7 @@ export function managementTools() {
     row('Pasar lista','Presencia real por convocatoria','#/gestion/presencia','check') +
     row('Informe de asistencia','Consultar y exportar por periodo','#/gestion/asistencia','chart') +
     row('Validar partituras','Revisar PDF pendientes de distribución','#/repertorio/validacion','file') +
-    row('Publicar aviso','Enviar a la banda activa','#/gestion/aviso','bell') + '</div>';
+    row('Publicar aviso','Enviar a las cuentas activas','#/gestion/aviso','bell') + '</div>';
 }
 
 export function pdfContent(file) {
@@ -32,7 +37,7 @@ export function pdfContent(file) {
   });
 }
 
-export async function management(content, ctx, mode) {
+export async function management(content, ctx, mode, action) {
   if (!manager(ctx.state)) {
     content.innerHTML = header('Gestión') + empty('Tu perfil no dispone de herramientas de gestión con esta conexión.');
     return;
@@ -62,23 +67,38 @@ export async function management(content, ctx, mode) {
   }
   const isRequest = mode === 'solicitudes';
   const title = isRequest ? 'Solicitudes' : 'Miembros';
+  if (!isRequest && action === 'nuevo') return memberEditor(content,ctx);
   content.innerHTML = back('Gestión','#/gestion') + header(title) + '<p role="status">Cargando…</p>';
   const { members } = await ctx.api('/management');
+  if (!isRequest && action) {
+    const member = members.find(item => item.id === action && editableMember(item));
+    if (member) return memberEditor(content,ctx,member);
+    content.innerHTML = back('Directorio',membersRoute) + empty('No se encuentra un músico activo.');
+    return;
+  }
   const listed = isRequest ? members.filter(member => member.status === 'pending') : members.filter(member => member.status === 'active' || member.status === 'inactive');
-  content.innerHTML = back('Gestión','#/gestion') + header(title,isRequest ? listed.length + ' pendientes de revisión' : 'Directorio interno') +
+  const roster = Object.fromEntries(members.filter(member => editableMember(member) && !member.email).map(member =>
+    [member.id,[member.name,member.instrument,member.voice].filter(Boolean).join(' · ')]));
+  const add = isRequest ? '' : '<a class="button primary" href="' + membersRoute + '/nuevo">' + icon('plus') + 'Añadir miembro</a>';
+  content.innerHTML = back('Gestión','#/gestion') + header(title,isRequest ? listed.length + ' pendientes de revisión' : 'Directorio interno',add) +
     (listed.length ? (!isRequest ? '<div class="catalog-tools">' + field('query','Buscar componentes','type="search" autocomplete="off"') + '</div>' : '') +
       '<div class="stack member-list">' + listed.map(member => '<article class="card member-card" data-member="' + esc(member.id) +
       '"><div class="member-heading"><span class="avatar">' + initials(member.name) + '</span><div><h2>' + esc(member.name) +
-      '</h2><p class="muted">' + instrument(member) + '</p><p class="muted">' + esc(member.email) + '</p>' +
+      '</h2><p class="muted">' + instrument(member) + '</p>' +
+      (member.email ? '<p class="muted">' + esc(member.email) + '</p>' : '') +
       (isRequest ? '<p class="muted">Solicitud · ' + displayTime(member.created_at) + '</p>' +
         (member.requires_email_verification && !member.email_verified_at ? pill('Correo pendiente de confirmar','accent') :
           member.email_verified_at ? pill('Correo confirmado','good') : '') :
-        pill(role[member.role]) + ' ' + pill(accessStatus[member.status])) + '</div></div>' +
-      (isRequest ? '<form data-id="' + member.id + '" class="stack"><div class="actions">' +
+        pill(role[member.role]) + ' ' + pill(accessStatus[member.status]) +
+        (member.email ? '' : ' ' + pill('Sin cuenta'))) + '</div></div>' +
+      (isRequest ? '<form data-id="' + member.id + '" class="stack">' +
+        (member.email_verified_at && Object.keys(roster).length ? '<label>Vincular a una ficha sin cuenta<select name="memberId">' +
+          '<option value="">Crear un miembro nuevo</option>' + options(roster) + '</select></label>' : '') + '<div class="actions">' +
         button('Rechazar','secondary','data-choice="rejected"') +
         button('Aprobar','primary','data-choice="active"' +
           (member.requires_email_verification && !member.email_verified_at ? ' disabled' : '')) +
-        '</div>' + errorRegion + '</form>' : '') + '</article>').join('') + '</div>' :
+        '</div>' + errorRegion + '</form>' : editableMember(member) ? link('Editar ficha',membersRoute + '/' + member.id) : '') +
+      '</article>').join('') + '</div>' :
     empty(isRequest ? 'No hay solicitudes pendientes.' : 'No hay componentes en el directorio.'));
   const search = content.querySelector('[name="query"]');
   if (search) search.oninput = () => {
@@ -92,22 +112,50 @@ export async function management(content, ctx, mode) {
     form.addEventListener('submit', event => {
       form.dataset.choice = event.submitter?.dataset.choice;
     });
-    bindForm(form, async () => {
+    bindForm(form, async ({memberId}) => {
       const status = form.dataset.choice;
       if (!status) return;
       const member = listed.find(item => item.id === form.dataset.id);
       const label = status === 'active' ? 'Aprobar' : 'Rechazar';
-      if (!await ctx.confirmAction(label + ' solicitud', member.name + ' · ' + member.email, label)) return;
-      await ctx.api('/requests/' + member.id,'PUT',{ status });
-      ctx.toast(status === 'active' ? 'Solicitud aprobada' : 'Solicitud rechazada');
+      const target = status === 'active' ? memberId : undefined;
+      const detail = member.name + ' · ' + member.email + (target ? ' · Vincular a ' + roster[target] : '');
+      if (!await ctx.confirmAction(label + ' solicitud', detail, label)) return;
+      await ctx.api('/requests/' + member.id,'PUT',{ status,memberId:target });
+      ctx.toast(target ? 'Cuenta vinculada a la ficha' : status === 'active' ? 'Solicitud aprobada' : 'Solicitud rechazada');
       await management(content,ctx,mode);
     });
   }
 }
 
+function memberEditor(content, ctx, member = null) {
+  const endpoint = '/management/members' + (member ? '/' + member.id : '');
+  content.innerHTML = back('Directorio',membersRoute) + header(member ? 'Editar miembro' : 'Añadir miembro',member?.name ?? '') +
+    '<form id="member-details" class="card stack">' +
+    (!member ? '<p class="muted">El miembro aparecerá al pasar lista. Puede añadirse sin correo ni cuenta.</p>' : '') +
+    field('name','Nombre y apellidos','required maxlength="120"',member?.name) + '<div class="field-grid">' +
+    field('instrument','Instrumento (opcional)','maxlength="80" list="instrument-options"',member?.instrument) +
+    field('voice','Voz (opcional)','maxlength="80" list="voice-options"',member?.voice) + '</div>' +
+    optionLists(ctx.state.data.catalogValues) + errorRegion +
+    '<div class="actions">' + button(member ? 'Guardar cambios' : 'Añadir miembro') + '</div></form>' +
+    (member ? '<form id="member-deactivate" class="card stack">' + errorRegion + '<div class="actions">' +
+      button('Dar de baja','secondary') + '</div></form>' : '');
+  bindForm(content.querySelector('#member-details'),async input => {
+    await ctx.api(endpoint,member ? 'PUT' : 'POST',input);
+    ctx.toast(member ? 'Ficha actualizada' : 'Miembro añadido');
+    ctx.go(membersRoute);
+  });
+  if (member) bindForm(content.querySelector('#member-deactivate'),async () => {
+    if (!await ctx.confirmAction('¿Dar de baja a este miembro?',
+      member.name + ' dejará de aparecer en las listas nuevas y se conservará su asistencia registrada.', 'Dar de baja')) return;
+    await ctx.api(endpoint + '/deactivate','POST',{});
+    ctx.toast('Miembro dado de baja');
+    ctx.go(membersRoute);
+  });
+}
+
 export async function eventEditor(content, ctx, id) {
   if (!manager(ctx.state)) {
-    content.innerHTML = back('Calendario','#/calendario') + empty('Solo administración y dirección pueden gestionar eventos en línea.');
+    content.innerHTML = back('Calendario','#/calendario') + empty('Gestionar eventos requiere acceso de Dirección y conexión.');
     return;
   }
   const creating = id === 'nuevo';
@@ -193,14 +241,14 @@ export function composeNotice(content, ctx) {
       options(Object.fromEntries(events.map(event => [event.id,event.title + ' · ' + displayTime(event.starts)])),draft.eventId) + '</select></label>' : '') +
     errorRegion + '<div class="actions">' + button('Revisar aviso') + button('Descartar borrador','quiet','type="button" id="discard-notice"') +
     '</div></form><div class="stack"><section class="card stack"><h2>Destinatarios</h2>' +
-    '<p>' + pill('Banda activa','accent') + '</p><p id="notice-audience" class="muted">El aviso aparecerá en la bandeja de cada destinatario.</p></section>' +
+    '<p>' + pill('Cuentas activas','accent') + '</p><p id="notice-audience" class="muted">El aviso aparecerá en la bandeja de cada destinatario.</p></section>' +
     '<section class="card stack notice-card"><h2>Vista previa</h2><p>' + pill('Lectura pendiente','waiting') + '</p>' +
     '<strong id="notice-preview-title">Asunto del aviso</strong><p id="notice-preview-body" class="muted pre">El mensaje aparecerá aquí.</p>' +
     '<p id="notice-preview-event" class="muted" hidden></p></section></div></div>';
   const form = content.querySelector('form');
   const audience = content.querySelector('#notice-audience');
   ctx.api('/notices/audience').then(({total}) => {
-    audience.textContent = total + ' miembros activos. El aviso aparecerá en su bandeja.';
+    audience.textContent = total + (total === 1 ? ' cuenta recibirá el aviso en su bandeja.' : ' cuentas recibirán el aviso en su bandeja.');
   }).catch(() => {});
   form.oninput = () => {
     const { title, message, eventId } = form.elements;

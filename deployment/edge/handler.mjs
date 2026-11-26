@@ -1,4 +1,5 @@
 import { createApi } from '../_shared/server/api.mjs';
+import { postgresSchemaVersion } from '../_shared/server/schema-version.mjs';
 
 const headers = {
   'Access-Control-Allow-Methods':'GET, POST, PUT, DELETE, OPTIONS',
@@ -27,7 +28,8 @@ export function createEdgeHandler(db,{ site, ...options }) {
     if (pathname === '/health' && request.method === 'GET') {
       try {
         const { version } = await db.prepare('SELECT version FROM calvario.schema_version WHERE singleton = 1').get();
-        return json(version === 1 ? 200 : 503,{ status:version === 1 ? 'ready' : 'schema' },origin === url.origin);
+        const ready = version === postgresSchemaVersion;
+        return json(ready ? 200 : 503,{ status:ready ? 'ready' : 'schema' },origin === url.origin);
       } catch {
         return json(503,{ status:'schema' },origin === url.origin);
       }

@@ -1,8 +1,9 @@
 import { DatabaseSync } from 'node:sqlite';
 import { digest } from './security.mjs';
 
+const newTables = ['material_items','material_loans','catalog_values'];
 const tables = ['members','events','intentions','presence','notices','inbox','formations','templates',
-  'works','files','google_identities','audit'];
+  'works','files','google_identities','audit',...newTables];
 const sessionTables = ['sessions','account_tokens','push_subscriptions','push_jobs'];
 
 function columns(statement) {
@@ -18,8 +19,9 @@ export async function importSqlite(destination,filename) {
   const source = new DatabaseSync(filename,{ readOnly:true });
   try {
     source.exec('BEGIN');
-    if (source.prepare('PRAGMA user_version').get().user_version !== 3) {
-      throw new Error('Usa una copia de SQLite con la versión de esquema 3.');
+    const { user_version: version } = source.prepare('PRAGMA user_version').get();
+    if (![3,4,5].includes(version)) {
+      throw new Error('Usa una copia de SQLite con la versión de esquema 3, 4 o 5.');
     }
     if (source.prepare('PRAGMA foreign_key_check').get()) throw new Error('La copia SQLite contiene relaciones no válidas.');
     return await destination.transaction(async () => {
@@ -33,12 +35,14 @@ export async function importSqlite(destination,filename) {
       await destination.exec('SET CONSTRAINTS ALL DEFERRED');
       const counts = {};
       for (const table of tables) {
+        if (version < 5 && newTables.includes(table)) continue;
         const select = source.prepare('SELECT * FROM ' + table);
         const names = columns(select);
         const insert = destination.prepare('INSERT INTO ' + table + '(' + names.join(', ') + ') VALUES (' +
           names.map(() => '?').join(', ') + ')');
         counts[table] = 0;
         for (const row of select.iterate()) {
+          if (table === 'members' && row.role === 'admin') row.role = 'director';
           if (table === 'files') {
             if (digest(row.content) !== row.digest) throw new Error('Un PDF de origen no coincide con su huella.');
             row.content = Buffer.from(row.content);

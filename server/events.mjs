@@ -16,7 +16,10 @@ export async function notify(db, title, message, event = null, author = null) {
   const id = randomUUID();
   return transaction(db, async () => {
     await db.prepare('INSERT INTO notices VALUES (?, ?, ?, ?, ?, ?)').run(id, title, message, now(), event, author);
-    await db.prepare("INSERT INTO inbox(notice_id, member_id) SELECT ?, id FROM members WHERE status = 'active'").run(id);
+    await db.prepare(`
+      INSERT INTO inbox(notice_id, member_id)
+      SELECT ?, id FROM members WHERE status = 'active' AND email IS NOT NULL
+    `).run(id);
     return id;
   });
 }

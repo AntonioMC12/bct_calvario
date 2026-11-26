@@ -16,8 +16,8 @@ Abre [localhost:3000](http://localhost:3000). El primer arranque crea `data/demo
 | Cuenta | Permisos de prueba |
 | --- | --- |
 | `musico@demo.invalid` | Consultar, responder, descargar partituras y confirmar lectura |
-| `administracion@demo.invalid` | Gestión de solicitudes, eventos, asistencia, formaciones, partituras y avisos |
-| `direccion@demo.invalid` | Gestión de solicitudes, eventos, asistencia, formaciones, partituras y avisos |
+| `direccion@demo.invalid` | Dirección. Gestión de miembros, material, eventos, formaciones, partituras y avisos |
+| `administracion@demo.invalid` | Segunda cuenta de Dirección con los mismos permisos |
 
 La base se reutiliza al volver a arrancar. Si necesitas otra contraseña de prueba, define `CALVARIO_DEMO_PASSWORD` en el entorno al iniciar la demo. Si ya existían las tres cuentas, se cambia su contraseña y se invalidan sus sesiones. `CALVARIO_DEMO_DB` permite crear una demo separada.
 
@@ -34,7 +34,7 @@ npx supabase login
 npx supabase db query --remote=vsmmpccqaywetuiyhevm --read-only "SELECT to_regnamespace('calvario') AS schema, to_regclass('calvario.schema_version') AS version_table;"
 ```
 
-Si el esquema está libre, inicialízalo y despliega la función. Si ya existe, comprueba su versión y sus tablas antes de reutilizarlo.
+Si el esquema está libre, inicialízalo con `dist/piloto/edge/schema.sql`. Si ya existe, consulta `calvario.schema_version`. Para actualizar a la versión 3, haz una copia y sustituye el archivo de la primera orden por `dist/piloto/edge/upgrade-from-v1.sql` o `dist/piloto/edge/upgrade-from-v2.sql`, según la versión instalada. Si ya está en la versión 3, pasa al despliegue de la función.
 
 ```powershell
 npx supabase db query --remote=vsmmpccqaywetuiyhevm --file dist/piloto/edge/schema.sql --yes
@@ -42,7 +42,7 @@ npx supabase functions deploy calvario-api --remote=vsmmpccqaywetuiyhevm --workd
 Invoke-RestMethod "$env:CALVARIO_EDGE_URL/health"
 ```
 
-La comprobación devuelve `status: ready` cuando la función puede leer la versión del esquema. Crea la primera cuenta de administración con `npm run account` y la conexión privada a PostgreSQL descrita más abajo. Para publicar cambios en la PWA, copia el contenido de `dist/piloto/pages`, incluido `.nojekyll`, a la rama `gh-pages`. El paquete `dist/piloto/edge`, los secretos, los datos y los ficheros `.env` quedan fuera de Pages.
+La comprobación devuelve `status: ready` cuando la función puede leer la versión del esquema. Si el piloto parte de cero, crea la primera cuenta de Dirección con `npm run account` y la conexión privada a PostgreSQL descrita más abajo. Para publicar cambios en la PWA, copia el contenido de `dist/piloto/pages`, incluido `.nojekyll`, a la rama `gh-pages`. El paquete `dist/piloto/edge`, los secretos, los datos y los ficheros `.env` quedan fuera de Pages.
 
 La función usa la conexión PostgreSQL del entorno Supabase. Si necesitas un pooler explícito o un certificado de CA, configura `CALVARIO_EDGE_DATABASE_URL` y `CALVARIO_DATABASE_CA_PEM` como secretos de la función. Para habilitar la entrega de correos en el piloto, configura `CALVARIO_RESEND_API_KEY` y un `CALVARIO_MAIL_FROM` con un remitente verificado. El acceso con Google utiliza las variables públicas de Firebase descritas abajo y el secreto `CALVARIO_FIREBASE_ADMIN_JSON` en la función. Los recordatorios y los reintentos de Web Push requieren programar una llamada `POST` a `/jobs` de la función con la cabecera `X-Calvario-Job` y el valor privado de `CALVARIO_JOB_SECRET`.
 
@@ -57,17 +57,24 @@ El servidor escucha en la interfaz local. `PORT` cambia el puerto y `CALVARIO_DB
 Para crear la primera cuenta de gestión en desarrollo, define `CALVARIO_PASSWORD` en un entorno privado y ejecuta uno de estos comandos:
 
 ```sh
-npm run account -- provision admin@ejemplo.invalid admin "Administración"
 npm run account -- provision direccion@ejemplo.invalid director "Dirección"
 ```
 
-El resto de músicos puede solicitar acceso desde la propia aplicación. Las altas nuevas confirman su correo antes de que administración o dirección las aprueben. La retirada operativa de una membresía de músico en desarrollo se hace con `npm run account -- deactivate músico@ejemplo.invalid`. Conserva sus registros e invalida sus sesiones.
+Los músicos pueden solicitar acceso desde la aplicación. Las altas por correo confirman su dirección antes de que Dirección las apruebe. Desde **Gestión → Directorio → Añadir miembro** se puede crear una ficha sin cuenta para pasar lista. En **Gestión → Solicitudes**, vincula la solicitud verificada a esa ficha al aprobarla para conservar la asistencia y el perfil musical. Desde **Editar ficha** se pueden actualizar los datos de un músico o darlo de baja. La baja conserva sus registros e invalida sus sesiones. En desarrollo también está disponible `npm run account -- deactivate músico@ejemplo.invalid`.
+
+En **Gestión → Material**, Dirección puede registrar cada pieza con su código, categoría y estado, prestarla a un miembro activo y registrar la devolución. El historial se conserva al archivar la pieza. En **Gestión → Catálogo musical** se pueden proponer instrumentos, voces y géneros en los formularios de alta, fichas y repertorio.
+
+## Partituras
+
+Los músicos pueden abrir y descargar los PDF vigentes de su instrumento y voz. En **Repertorio → Descargar mis partituras** se descarga todo su repertorio autorizado en un ZIP. **Descarga por lotes** permite seleccionar PDF concretos. Dirección tiene acceso al catálogo completo y puede cargar hasta 20 PDF por lote, con un máximo de 5 MiB por archivo.
+
+Para reemplazar un PDF, abre la obra y elige **Subir nueva versión**. Al validarla, el PDF anterior pasa al historial de la obra y la versión nueva queda disponible para su instrumento y voz.
 
 ## Conectar Supabase
 
 1. Crea un proyecto de pruebas. En **Connect**, copia la cadena **Session pooler** del puerto 5432. También se admite la conexión directa si tu red tiene IPv6. Sustituye el marcador de contraseña y aplica codificación URL si contiene caracteres reservados.
 2. Descarga el certificado desde **Database → Settings → SSL Configuration**. Define `CALVARIO_DATABASE_URL` y `CALVARIO_DATABASE_CA` en `.env`. Solo Node.js usa ese archivo. El servidor verifica el certificado y el nombre del servidor de Supabase.
-3. Ejecuta `npm run db:setup` y `npm run db:check`. Las tablas se crean en el esquema privado `calvario`. Mantén ese esquema fuera de la lista de esquemas expuestos por la Data API.
+3. Ejecuta `npm run db:setup` y `npm run db:check`. El primer comando crea el esquema privado `calvario` o lo actualiza desde las versiones 1 y 2. Mantén ese esquema fuera de la lista de esquemas expuestos por la Data API.
 4. Si partes de cero, crea una cuenta de gestión con `npm run account` como se indica arriba. Si quieres conservar datos, importa primero la copia SQLite.
 5. Arranca con `npm start`. La consola debe indicar **Supabase PostgreSQL**. `npm run demo` sigue usando SQLite y sus cuentas ficticias.
 
@@ -75,13 +82,13 @@ Firebase sigue verificando el acceso con Google. Node.js aplica los permisos, si
 
 ### Migrar una base SQLite existente
 
-Detén la instancia que escribe en SQLite durante el cambio o utiliza una copia coherente del archivo de esquema 3. Prepara primero un destino vacío con `npm run db:setup`, y luego ejecuta:
+Detén la instancia que escribe en SQLite durante el cambio o utiliza una copia coherente del archivo de esquema 3, 4 o 5. Prepara primero un destino vacío con `npm run db:setup`, y luego ejecuta:
 
 ```sh
 npm run db:import -- data/copias/antes-supabase.sqlite
 ```
 
-La importación conserva las cuentas, las vinculaciones con Google, el historial, los avisos y los PDF. Comprueba las relaciones, verifica las huellas de los PDF y cancela la operación si hay un error o el destino contiene datos. Las sesiones, enlaces temporales y suscripciones push se vuelven a crear desde la app. Guarda la copia de origen hasta verificar el piloto.
+La importación conserva las cuentas, las fichas sin cuenta, las vinculaciones con Google, el historial, los avisos, el inventario y los PDF con sus versiones. Comprueba las relaciones, verifica las huellas de los PDF y cancela la operación si hay un error o el destino contiene datos. Las sesiones, enlaces temporales y suscripciones push se vuelven a crear desde la app. Guarda la copia de origen hasta verificar el piloto.
 
 ## Confirmar un correo o recuperar la contraseña
 
@@ -98,7 +105,7 @@ Para preparar una instancia de piloto, usa `.env.example` como referencia. Confi
 3. Da al servidor credenciales de aplicación de Google para ese proyecto. En desarrollo, puedes apuntar `GOOGLE_APPLICATION_CREDENTIALS` a un archivo privado fuera del repositorio. El servidor verifica la firma, el proyecto y el estado de revocación de la identidad antes de abrir una sesión de Calvario.
 4. Arranca con `node --env-file=.env scripts/serve.mjs`. Para probar con los datos ficticios, usa `node --env-file=.env scripts/demo.mjs`.
 
-Quien ya tenga cuenta inicia sesión con su contraseña y vincula el mismo correo desde **Perfil → Acceso con Google**. Quien use Google por primera vez completa nombre e instrumento y solicita acceso. Administración o dirección sigue aprobando las altas y las cuentas de baja conservan el bloqueo. La recuperación por correo de Calvario se aplica a sus cuentas con contraseña.
+Quien ya tenga cuenta inicia sesión con su contraseña y vincula el mismo correo desde **Perfil → Acceso con Google**. Quien use Google por primera vez completa nombre e instrumento y solicita acceso. Dirección aprueba las altas y puede vincularlas a fichas existentes. La recuperación por correo de Calvario se aplica a las cuentas con contraseña.
 
 ## Activar Web Push
 
@@ -134,4 +141,4 @@ El comando `npm run backup` respalda SQLite y comprueba su integridad. Para ensa
 - `public/` contiene el escudo original, los iconos derivados y las fuentes Inter y Cinzel con sus licencias OFL.
 - `docs/development.md` registra cobertura, pruebas y decisiones. `AGENTS.md` orienta las siguientes sesiones.
 
-Queda validar el proxy y los proveedores reales de correo, Google y push en los dispositivos del piloto. Los demás pendientes se detallan en el seguimiento.
+Consulta el [estado y los pendientes de Calvario](docs/estado-y-pendientes.md) para ver qué está implementado y qué queda por desarrollar o validar en el piloto.

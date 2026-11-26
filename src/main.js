@@ -5,6 +5,8 @@ import { calendar, eventPage } from './events.js';
 import { repertoire, downloads } from './repertoire.js';
 import { attendanceReportPage } from './report.js';
 import { management, managementTools, eventEditor, formationEditor, composeNotice } from './management.js';
+import { materialPage } from './material.js';
+import { catalogPage } from './part-options.js';
 import { access, mailRoutes } from './access.js';
 import { bindGoogle, googleButton } from './google.js';
 import { clearPush, pushSettings } from './push.js';
@@ -88,6 +90,7 @@ async function refresh() {
   if (local.account && local.account !== data.member.id) await reset();
   state.member = data.member;
   state.data = data;
+  state.catalogValues = data.catalogValues;
   state.offline = false;
   state.cacheReady = false;
   try {
@@ -97,7 +100,7 @@ async function refresh() {
     toast(error.message);
   }
   state.pending = local.account === data.member.id ? local.pending : {};
-  state.saved = await savedFiles(data.member.id).catch(() => new Set());
+  state.saved = await savedFiles(data.member.id,data.works).catch(() => new Set());
 }
 
 let booting;
@@ -113,8 +116,8 @@ async function restore() {
       await api('/logout', 'POST', {});
       clearLocalSignout();
     }
-    const { member, google, pushEnabled, mailEnabled } = await api('/session');
-    Object.assign(state,{ google,pushEnabled,mailEnabled,pilotUnavailable:false });
+    const { member, google, pushEnabled, mailEnabled, catalogValues } = await api('/session');
+    Object.assign(state,{ google,pushEnabled,mailEnabled,catalogValues,pilotUnavailable:false });
     state.offline = false;
     local = getLocal();
     if (!member) clearSession();
@@ -132,7 +135,7 @@ async function restore() {
       state.member = local.dashboard?.member ?? null;
       state.pending = local.pending;
       state.cacheReady = Boolean(local.dashboard);
-      state.saved = await savedFiles(state.member?.id).catch(() => new Set());
+      state.saved = await savedFiles(state.member?.id,local.dashboard?.works).catch(() => new Set());
     } else {
       networkFailure(error);
       toast(error.message);
@@ -427,13 +430,15 @@ async function render() {
     else if (route === 'calendario' && (id === 'nuevo' || action === 'editar')) await eventEditor(content, context, id);
     else if (route === 'calendario' && action === 'formacion') await formationEditor(content, context, id);
     else if (route === 'calendario') await eventPage(content, context, id, action);
-    else if (route === 'repertorio') repertoire(content, context, id);
+    else if (route === 'repertorio') repertoire(content, context, id, action);
     else if (route === 'avisos') bindNotices(content, id);
     else if (route === 'perfil' && id === 'notificaciones') await pushSettings(content,context);
     else if (route === 'perfil') profile(content, id);
     else if (route === 'gestion' && id === 'aviso') composeNotice(content, context);
     else if (route === 'gestion' && id === 'asistencia') attendanceReportPage(content, context);
-    else if (route === 'gestion') await management(content, context, id);
+    else if (route === 'gestion' && id === 'material') await materialPage(content,context,action);
+    else if (route === 'gestion' && id === 'catalogo') catalogPage(content,context);
+    else if (route === 'gestion') await management(content, context, id, action);
     else content.innerHTML = header('Página no encontrada') + link('Volver al inicio','#/inicio');
   } catch (error) {
     if (token !== rendering) return;

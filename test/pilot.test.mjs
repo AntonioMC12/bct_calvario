@@ -5,7 +5,9 @@ import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { test } from 'node:test';
 import { testStore } from '../scripts/test-store.mjs';
-import { hashPassword } from '../server/security.mjs';
+import { digest, hashPassword } from '../server/security.mjs';
+import { samplePdf } from '../scripts/sample-pdf.mjs';
+import { unzipSync } from 'fflate';
 
 const site = 'https://antoniomc12.github.io/bct_calvario/';
 const origin = new URL(site).origin;
@@ -60,6 +62,13 @@ test('Pages solo publica recursos estáticos y la API Edge conserva la autorizac
     const data = await request('/api/dashboard','GET',null,sessionToken);
     assert.equal(data.status,200);
     assert.equal((await data.json()).member.id,'test');
+    const score = samplePdf();
+    await db.exec("INSERT INTO works VALUES ('work','Obra','Autor','Marcha')");
+    await db.prepare(`INSERT INTO files(id,work_id,name,instrument,voice,content,digest,approved)
+      VALUES ('file','work','piloto.pdf','Corneta','',?,?,1)`).run(score,digest(score));
+    const zip = await request('/api/scores/export','POST',{},sessionToken);
+    assert.equal(zip.status,200);
+    assert.deepEqual(Object.keys(unzipSync(new Uint8Array(await zip.arrayBuffer()))),['001-piloto.pdf']);
     assert.equal((await request('/api/account/forgot','POST',{ email:'test@example.invalid' })).status,202);
     assert.match(mailbox[0].text,/https:\/\/antoniomc12\.github\.io\/bct_calvario\/#\/restablecer\//);
     assert.equal((await request('/api/logout','POST',{},sessionToken)).status,200);

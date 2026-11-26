@@ -3,6 +3,8 @@
     "pg": "npm:pg@8.23.1",
     "firebase-admin/app": "npm:firebase-admin@14.5.1/app",
     "firebase-admin/auth": "npm:firebase-admin@14.5.1/auth",
-    "web-push": "npm:web-push@4.0.0"
+    "web-push": "npm:web-push@4.0.0",
+    "fflate": "npm:fflate@0.8.2",
+    "pdf-lib": "npm:pdf-lib@1.17.1"
   }
 }

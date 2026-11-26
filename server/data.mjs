@@ -1,12 +1,15 @@
 import { readFileSync } from 'node:fs';
 import pg from 'pg';
 import { openDatabase } from './db.mjs';
+import { postgresSchemaVersion } from './schema-version.mjs';
 import { postgresStore, safeNumber, store } from './store.mjs';
 
 export { postgresStore };
 
 const adapters = new WeakMap();
-const dbVersion = 1;
+const postgresMigrations = [
+  '001-initial.sql', '002-roster-members.sql', '003-management-material-scores.sql',
+];
 
 export function sqliteStore(database) {
   if (database.dialect === 'sqlite') return database;
@@ -76,17 +79,24 @@ export async function preparePostgres(db) {
   if (db.dialect !== 'postgres') throw new Error('La preparación requiere PostgreSQL.');
   await db.transaction(async () => {
     const existing = await db.prepare("SELECT to_regclass('calvario.schema_version') IS NOT NULL AS initialized").get();
-    if (!existing.initialized) {
-      const schema = readFileSync(new URL('postgres/001-initial.sql',import.meta.url),'utf8');
-      await db.exec(schema);
+    const version = existing.initialized ? await postgresVersion(db) : 0;
+    for (const file of postgresMigrations.slice(version ?? postgresMigrations.length)) {
+      const migration = readFileSync(new URL('postgres/' + file,import.meta.url),'utf8');
+      await db.exec(migration);
     }
     await assertPostgres(db);
   });
 }
 
-async function assertPostgres(db) {
+async function postgresVersion(db) {
   const result = await db.prepare('SELECT version FROM calvario.schema_version WHERE singleton = 1').get();
-  if (result?.version !== dbVersion) throw new Error('Prepara la versión del esquema con npm run db:setup.');
+  return result?.version;
+}
+
+async function assertPostgres(db) {
+  if (await postgresVersion(db) !== postgresSchemaVersion) {
+    throw new Error('Prepara la versión del esquema con npm run db:setup.');
+  }
 }
 
 export async function openData(filename,{ demo = false, env = process.env } = {}) {

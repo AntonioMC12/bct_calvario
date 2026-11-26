@@ -4,7 +4,7 @@ import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
 import { openDatabase } from '../server/db.mjs';
 import { postgresStore, preparePostgres, sqliteStore } from '../server/data.mjs';
 
-export async function testStore(engine = process.env.CALVARIO_TEST_ENGINE, { transactionPool = false } = {}) {
+export async function testStore(engine = process.env.CALVARIO_TEST_ENGINE, { transactionPool = false, prepare = true } = {}) {
   if (engine !== 'postgres') {
     const db = sqliteStore(openDatabase(':memory:'));
     return { db, close:()=>db.close() };
@@ -25,7 +25,7 @@ export async function testStore(engine = process.env.CALVARIO_TEST_ENGINE, { tra
     await raw.close();
   }
   try {
-    await preparePostgres(db);
+    if (prepare) await preparePostgres(db);
     return { db,close };
   } catch (error) {
     await close();

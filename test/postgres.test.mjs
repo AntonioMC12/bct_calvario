@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, rmdir } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, rmdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -27,6 +27,30 @@ test('Supabase usa un esquema privado y permite preparar el esquema dos veces', 
   }
 });
 
+test('actualiza PostgreSQL 1 sin perder cuentas ni sus relaciones', async () => {
+  const { db,close } = await testStore('postgres',{ prepare:false });
+  try {
+    const schema = await readFile(new URL('../server/postgres/001-initial.sql',import.meta.url),'utf8');
+    await db.transaction(() => db.exec(schema));
+    await db.exec(`
+      INSERT INTO members(id,email,password,name,instrument,voice,status,created_at,role)
+      VALUES ('legacy','anterior@example.invalid','clave-de-prueba','Miembro anterior','Corneta','','active','2026-11-23','admin');
+      INSERT INTO sessions VALUES ('session-legacy','legacy',2000000000000);
+    `);
+    await preparePostgres(db);
+    const legacy = await db.prepare('SELECT email, role FROM members JOIN sessions ON members.id = sessions.member_id').get();
+    assert.equal(legacy.email,'anterior@example.invalid');
+    assert.equal(legacy.role,'director');
+    await db.exec(`
+      INSERT INTO members(id,password,name,instrument,voice,status,created_at,password_enabled)
+      VALUES ('roster','','Ficha','Corneta','','active','2026-11-23',0);
+    `);
+    assert.equal((await db.prepare("SELECT email FROM members WHERE id = 'roster'").get()).email,null);
+  } finally {
+    await close();
+  }
+});
+
 test('importa SQLite con PDF, identidad e historial y deja fuera los accesos temporales', async () => {
   const folder = await mkdtemp(join(tmpdir(),'calvario-import-'));
   const filename = join(folder,'source.sqlite');
@@ -43,13 +67,14 @@ test('importa SQLite con PDF, identidad e historial y deja fuera los accesos tem
     `);
     const hash = await hashPassword(password);
     user.run('musician','musico@example.invalid',hash,'Músico','musician',now);
-    user.run('admin','admin@example.invalid',hash,'Administración','admin',now);
+    user.run('admin','admin@example.invalid',hash,'Dirección','director',now);
     source.prepare("UPDATE members SET reviewed_by = 'admin' WHERE id = 'musician'").run();
     source.prepare("INSERT INTO events(id,title,type,starts,ends,location,town,meeting,description) VALUES ('event','Ensayo','Ensayo',?,?,'','','','')")
       .run(now,new Date(Date.now() + 3600000).toISOString());
     source.prepare("INSERT INTO intentions VALUES ('event','musician','yes','',1,'musician',?,NULL)").run(now);
     source.prepare("INSERT INTO works VALUES ('score','Obra','Autor','Marcha')").run();
-    source.prepare("INSERT INTO files VALUES ('file','score',NULL,'partitura.pdf','Corneta','',?,?,1)").run(score,digest(score));
+    source.prepare(`INSERT INTO files(id,work_id,name,instrument,voice,content,digest,approved)
+      VALUES ('file','score','partitura.pdf','Corneta','',?,?,1)`).run(score,digest(score));
     source.prepare("INSERT INTO google_identities VALUES ('subject','firebase-uid','musician')").run();
     source.prepare("INSERT INTO audit VALUES (200,'admin','access.active','musician',?)").run(now);
     source.prepare("INSERT INTO sessions VALUES ('old-session','admin',?)").run(Date.now()+3600000);

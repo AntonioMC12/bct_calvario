@@ -21,7 +21,7 @@ async function seed() {
   const time = new Date().toISOString();
   const members = [
     ['musico@demo.invalid','Antonio Muñoz','Corneta','Primera','musician','active'],
-    ['administracion@demo.invalid','Carmen Ruiz','Corneta','Segunda','admin','active'],
+    ['administracion@demo.invalid','Carmen Ruiz','Corneta','Segunda','director','active'],
     ['direccion@demo.invalid','Elena López','Trompeta','','director','active'],
     ['manuel@demo.invalid','Manuel Pérez','Percusión','','musician','active'],
     ['lucia@demo.invalid','Lucía Martín','Corneta','Primera','musician','pending'],
@@ -52,7 +52,8 @@ async function seed() {
   const workId = randomUUID();
   const score = samplePdf();
   await db.prepare('INSERT INTO works VALUES (?, ?, ?, ?)').run(workId,'Luz de Calvario','A. Romero','Marcha');
-  await db.prepare('INSERT INTO files VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 1)')
+  await db.prepare(`INSERT INTO files(id, work_id, name, instrument, voice, content, digest, approved)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 1)`)
     .run(randomUUID(),workId,'luz-de-calvario.pdf','Corneta','Primera',score,digest(score));
   return true;
 }

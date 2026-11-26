@@ -1,5 +1,23 @@
 # Seguimiento del desarrollo
 
+El [estado y los pendientes de Calvario](estado-y-pendientes.md) recoge la cobertura actual y los requisitos añadidos el 26 de noviembre de 2026. Las entradas siguientes conservan el historial de cada entrega.
+
+## 2026-11-26 · Dirección, inventario y repertorio autorizado
+
+- DP02 y RF01–RF08. Administración se integra en Dirección. La migración conserva los identificadores y las sesiones de las cuentas. Dirección vincula una solicitud de correo verificado o Google a una ficha sin cuenta al aprobarla. Se mantienen el perfil musical, la presencia, las asignaciones de material y la identidad de acceso.
+- Dirección registra inventario por pieza, préstamos a miembros activos y devoluciones. Se rechazan préstamos simultáneos de la misma pieza y el archivo conserva el historial. El catálogo editable ofrece sugerencias de instrumentos, voces y géneros y admite los valores libres existentes.
+- RF29–RF32 y CP07. Los músicos acceden a las partituras vigentes de su parte en el catálogo, por enlace directo y en ZIP. La app depura las descargas internas al actualizar el catálogo. Dirección puede sustituir un PDF y consultar las versiones anteriores. La sustitución se publica solo tras validar la nueva versión.
+- Se añade `pdf-lib` para comprobar la estructura, el acceso a las páginas y el cifrado durante la carga. `fflate` genera el ZIP sin volver a comprimir los PDF y el servidor lo entrega leyendo un PDF cada vez. Los adjuntos de eventos mantienen su política de acceso.
+- La migración SQLite 005 y la de PostgreSQL 003 conservan los datos. La compilación genera el esquema completo y las rutas de actualización desde PostgreSQL 1 y 2. La importación acepta copias SQLite 3, 4 y 5. La caché de la app pasa a `v12`.
+- Pasaron `npm run check`, 29 pruebas generales y 25 de PostgreSQL local. Se ejecutaron el SQL de instalación y los dos SQL de actualización sobre bases aisladas. Deno comprobó el paquete Edge. En el navegador se verificaron inventario, catálogo, vinculación de solicitud, sustitución de PDF y el contenido de los ZIP completo y por selección. Quedan la configuración y la aceptación con el piloto real.
+
+## 2026-11-26 · Miembros sin cuenta y directorio
+
+- RF01, RF05, RF08 y RF22–RF24. Administración y Dirección pueden crear fichas sin cuenta desde Gestión → Directorio, editar los datos de músicos activos y darles de baja. Para dar de alta una ficha basta el nombre. Instrumento y voz son opcionales y siguen siendo texto libre hasta definir el catálogo (DP01).
+- Las fichas sin cuenta se incluyen en presencia, informes y formaciones. Las usan las mismas referencias que las membresías con cuenta, con correo vacío en base de datos y acceso por contraseña deshabilitado. Los avisos se destinan a las cuentas activas. La baja conserva las anotaciones y revoca sesiones y enlaces temporales. Queda pendiente vincular una ficha a una futura solicitud de acceso sin duplicar el miembro.
+- La migración SQLite 004 y la de PostgreSQL 002 conservan las referencias existentes. El paquete del piloto incluye `upgrade-from-v1.sql`. La importación acepta copias SQLite de las versiones 3 y 4. La caché de aplicación pasa a `v11`.
+- Pasaron `npm run check`, 24 pruebas generales y 20 de PostgreSQL local. En navegador y con una demo aislada se creó y editó una ficha, se registró su presencia en un ensayo y se comprobó que seguía en el informe después de la baja.
+
 ## 2026-11-24 · Permisos de Administración y Dirección
 
 - DP02. Administración y Dirección comparten los permisos de gestión en la interfaz y la API. Ambos roles pueden gestionar formaciones, asistencia, obras, partituras y avisos. Los motivos privados de ausencia son visibles para quien los escribió y para ambos roles de gestión. El informe de asistencia sigue siendo agregado.

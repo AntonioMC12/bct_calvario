@@ -7,6 +7,7 @@ import { createAppServer } from '../scripts/serve.mjs';
 import { samplePdf } from '../scripts/sample-pdf.mjs';
 import { localMinute, madridInstant } from '../src/time.js';
 import { sendDueReminders } from '../server/events.mjs';
+import { unzipSync } from 'fflate';
 
 const { db,close } = await testStore();
 const mailbox = [];
@@ -30,7 +31,8 @@ function client() {
     });
     if (response.headers.has('set-cookie')) cookie = response.headers.get('set-cookie').split(';')[0];
     const type = response.headers.get('content-type') || '';
-    const data = type.startsWith('application/json') ? await response.json() : await response.text();
+    const data = type.startsWith('application/json') ? await response.json() :
+      type === 'application/zip' ? new Uint8Array(await response.arrayBuffer()) : await response.text();
     return { status: response.status, type, data };
   };
 }
@@ -49,7 +51,7 @@ before(async () => {
   `);
   for (const role of ['admin','director','musician']) {
     ids[role] = randomUUID();
-    await insert.run(ids[role],role + '@test.invalid',hash,'Cuenta ' + role,role,new Date().toISOString());
+    await insert.run(ids[role],role + '@test.invalid',hash,'Cuenta ' + role,role === 'admin' ? 'director' : role,new Date().toISOString());
   }
   await new Promise(resolve => server.listen(0,'127.0.0.1',resolve));
   base = 'http://127.0.0.1:' + server.address().port;
@@ -68,7 +70,7 @@ after(async () => {
   await close();
 });
 
-test('administración y dirección consultan el mismo informe agregado sin motivos privados', async () => {
+test('dos cuentas de Dirección consultan el mismo informe agregado sin motivos privados', async () => {
   const saved = await director('/events','POST',{ ...previous,title:'Ensayo para informe' });
   assert.equal(saved.status,201);
   const target = '/events/' + saved.data.id;
@@ -97,7 +99,7 @@ test('administración y dirección consultan el mismo informe agregado sin motiv
   assert.ok(!(await director(report,'POST',{ ...filters,type:'Concierto' })).data.rows.some(row => row.id === saved.data.id));
 });
 
-test('administración y dirección gestionan comunicados y consultan acuses agregados', async () => {
+test('dos cuentas de Dirección gestionan comunicados y consultan acuses agregados', async () => {
   const event = await director('/events','POST',{ ...previous,title:'Convocatoria del comunicado' });
   assert.equal(event.status,201);
   const content = { title:'Comunicado de prueba',message:'Recordatorio de ensayo.',eventId:event.data.id };
@@ -117,6 +119,51 @@ test('administración y dirección gestionan comunicados y consultan acuses agre
   assert.deepEqual((await admin(link+'/receipts')).data,{ total:audience.data.total, confirmed:0 });
   for (let i = 0; i < 2; i++) assert.equal((await musician(link+'/read','PUT',{})).status,200);
   assert.deepEqual((await director(link+'/receipts')).data,{ total:audience.data.total, confirmed:1 });
+});
+
+test('un miembro sin cuenta cuenta en la presencia y conserva su historial al causar baja', async () => {
+  const profile = { name:'Componente sin cuenta', instrument:'Tuba', voice:'Segunda' };
+  const members = '/management/members';
+  const audience = (await director('/notices/audience')).data.total;
+  assert.equal((await client()(members,'POST',profile)).status,401);
+  assert.equal((await musician(members,'POST',profile)).status,403);
+  assert.equal((await admin(members,'POST',{ ...profile,name:' ' })).status,422);
+  const created = await admin(members,'POST',{ name:profile.name,email:'correo@test.invalid',role:'director' });
+  assert.equal(created.status,201);
+  const id = created.data.id;
+  const endpoint = members + '/' + id;
+  const directory = await director('/management');
+  const member = directory.data.members.find(item => item.id === id);
+  assert.equal(member.email,null);
+  assert.equal(member.role,'musician');
+  assert.equal(member.status,'active');
+  assert.equal(member.instrument,'');
+  assert.equal((await musician(endpoint,'PUT',profile)).status,403);
+  assert.equal((await director(endpoint,'PUT',{ ...profile,voice:'Primera' })).status,200);
+  assert.equal((await director('/notices/audience')).data.total,audience);
+
+  const event = await director('/events','POST',{ ...previous,title:'Ensayo con ficha sin cuenta' });
+  assert.equal(event.status,201);
+  const path = '/events/' + event.data.id;
+  const roster = (await director(path)).data.roster.find(item => item.id === id);
+  assert.deepEqual([roster.voice,roster.intention,roster.presence],['Primera','unset','unset']);
+  const rows = [{ id,value:'present' }];
+  assert.equal((await director(path + '/presence','PUT',{ rows })).status,200);
+  const day = previous.starts.slice(0,10);
+  const report = () => admin('/reports/attendance','POST',{ from:day,to:day });
+  const check = async () => {
+    const totals = (await report()).data.rows.find(row => row.id === event.data.id && row.instrument === 'Tuba');
+    assert.deepEqual([totals.recorded,totals.present],[1,1]);
+  };
+  await check();
+  assert.equal(await db.prepare('SELECT 1 FROM inbox WHERE member_id = ?').get(id),undefined);
+  assert.equal((await musician(endpoint + '/deactivate','POST',{})).status,403);
+  assert.equal((await director(members + '/' + ids.admin + '/deactivate','POST',{})).status,404);
+  assert.equal((await director(endpoint + '/deactivate','POST',{})).status,200);
+  assert.equal((await director(endpoint,'PUT',profile)).status,404);
+  assert.equal((await director(path + '/presence','PUT',{ rows })).status,404);
+  assert.equal(Boolean((await admin(path)).data.roster.find(item => item.id === id).active),false);
+  await check();
 });
 
 test('alta pendiente, aprobación y bloqueo de contactos', async () => {
@@ -305,7 +352,115 @@ test('dirección crea obras y carga partituras que siguen privadas hasta su vali
   assert.equal((await musician(pdf)).type,'application/pdf');
 });
 
-test('edición de obras, PDF privado, duplicados, validación por administración y baja', async () => {
+test('el ZIP y los enlaces directos aplican instrumento, voz y versión vigente', async () => {
+  const book = await director('/works','POST',{ title:'Partes de ensayo',authors:'Prueba',genre:'Marcha' });
+  const other = await director('/works','POST',{ title:'Otra obra',authors:'Prueba',genre:'Marcha' });
+  const publish = async (workId, name, instrument, voice) => {
+    const data = { name,instrument,voice,content:samplePdf(name).toString('base64') };
+    const uploaded = await director('/works/' + workId + '/scores','POST',data);
+    assert.equal(uploaded.status,201);
+    assert.equal((await director('/files/' + uploaded.data.id + '/approve','PUT',{})).status,200);
+    return uploaded.data.id;
+  };
+  const own = await publish(book.data.id,'mi-voz.pdf','córneta','PRIMERA');
+  const extra = await publish(other.data.id,'otra-obra.pdf','Corneta','Primera');
+  const otherVoice = await publish(book.data.id,'otra-voz.pdf','Corneta','Segunda');
+  const otherInstrument = await publish(book.data.id,'otro-instrumento.pdf','Trompeta','Primera');
+  const lookup = async () => (await musician('/dashboard')).data.works.find(item => item.id === book.data.id).scores;
+  assert.deepEqual((await lookup()).map(file => file.id),[own]);
+  for (const id of [otherVoice,otherInstrument]) assert.equal((await musician('/files/' + id)).status,404);
+  assert.equal((await director('/files/' + otherVoice)).status,200);
+  assert.equal((await musician('/scores/export','POST',{ ids:[own,otherVoice] })).status,404);
+  const selected = await musician('/scores/export','POST',{ ids:[extra] });
+  assert.equal(selected.type,'application/zip');
+  assert.deepEqual(Object.keys(unzipSync(selected.data)),['001-otra-obra.pdf']);
+  const mine = await musician('/scores/export','POST',{});
+  assert.equal(mine.status,200);
+  assert.deepEqual(Object.keys(unzipSync(mine.data)).filter(name => /mi-voz|otra-obra|otra-voz|otro-instrumento/.test(name)).map(name => name.slice(4)).sort(),
+    ['mi-voz.pdf','otra-obra.pdf']);
+  const replace = '/files/' + own + '/replace';
+  assert.equal((await director(replace,'POST',{ name:'mal.pdf',content:Buffer.from('%PDF-1.4\n%%EOF').toString('base64') })).status,422);
+  const content = samplePdf('Nueva versión').toString('base64');
+  const discarded = await director(replace,'POST',{ name:'descartar.pdf',content });
+  assert.equal(discarded.status,201);
+  assert.equal((await director('/files/' + discarded.data.id,'DELETE',{})).status,200);
+  const replacement = await director(replace,'POST',{ name:'nueva-version.pdf',content });
+  assert.equal(replacement.status,201);
+  assert.equal((await musician('/files/' + own)).status,200);
+  assert.equal((await musician('/files/' + replacement.data.id)).status,404);
+  assert.equal((await director('/files/' + replacement.data.id + '/approve','PUT',{})).status,200);
+  assert.equal((await musician('/files/' + own)).status,404);
+  assert.deepEqual((await lookup()).map(file => file.id),[replacement.data.id]);
+  assert.equal((await director('/files/' + own)).status,200);
+  assert.equal((await director(replace,'POST',{ name:'otra-version.pdf',content })).status,409);
+});
+
+test('Dirección presta material a un miembro sin cuenta y conserva las devoluciones', async () => {
+  const endpoint = '/material';
+  const asset = { name:'Tuba de pruebas',code:'t-01',category:'Instrumentos',condition:'usable' };
+  const created = await director(endpoint,'POST',asset);
+  assert.equal(created.status,201);
+  const path = endpoint + '/' + created.data.id;
+  assert.equal((await musician(endpoint)).status,403);
+  assert.equal((await musician(path + '/loan','POST',{ version:1,memberId:ids.musician })).status,403);
+  assert.equal((await director(endpoint,'POST',{ ...asset,code:'T-01' })).status,409);
+  const roster = await director('/management/members','POST',{ name:'Miembro del inventario' });
+  assert.equal(roster.status,201);
+  const input = { version:1,memberId:roster.data.id };
+  const attempts = await Promise.all([director(path + '/loan','POST',input),admin(path + '/loan','POST',input)]);
+  assert.deepEqual(attempts.map(result => result.status).sort(),[200,409]);
+  assert.equal((await director(path + '/archive','POST',{ version:2 })).status,409);
+  assert.equal((await director(path + '/return','POST',{ version:2 })).status,200);
+  assert.equal((await director(path + '/archive','POST',{ version:3 })).status,200);
+  assert.equal((await director(path + '/loan','POST',{ ...input,version:4 })).status,409);
+  const data = (await director(endpoint)).data;
+  assert.equal(data.items.find(item => item.id === created.data.id).archived,1);
+  const loan = data.loans.find(item => item.item_id === created.data.id);
+  assert.equal(loan.member_id,roster.data.id);
+  assert.ok(loan.returned_at);
+  assert.equal((await director(path + '/restore','POST',{ version:4 })).status,200);
+});
+
+test('vincular una solicitud verificada conserva la presencia y evita duplicar la ficha', async () => {
+  const created = await director('/management/members','POST',{ name:'Ficha previa',instrument:'Tuba' });
+  const id = created.data.id;
+  const event = await director('/events','POST',{ ...previous,title:'Ensayo de la ficha previa' });
+  assert.equal((await director('/events/' + event.data.id + '/presence','PUT',{ rows:[{ id,value:'present' }] })).status,200);
+  const user = client();
+  const email = 'vinculada@test.invalid';
+  const access = { email,password:secret,name:'Perfil desde solicitud',instrument:'Corneta' };
+  assert.equal((await user('/request-access','POST',access)).status,201);
+  const pending = (await user('/session')).data.member.id;
+  const route = '/requests/' + pending;
+  const link = { status:'active',memberId:id };
+  assert.equal((await director(route,'PUT',link)).status,409);
+  assert.equal((await user('/account/verify','POST',{ token:takeToken(email,'verificar') })).status,200);
+  assert.equal((await director(route,'PUT',{ ...link,memberId:ids.admin })).status,409);
+  assert.equal((await director(route,'PUT',link)).status,200);
+  const dashboard = (await user('/dashboard')).data;
+  assert.equal(dashboard.member.id,id);
+  assert.equal(dashboard.member.instrument,'Tuba');
+  assert.equal(dashboard.events.find(item => item.id === event.data.id).presence,'present');
+  const directory = (await director('/management')).data.members;
+  assert.equal(directory.some(member => member.id === pending),false);
+  assert.equal(directory.find(member => member.id === id).email,email);
+  assert.equal((await client()('/login','POST',{ email,password:secret })).status,200);
+});
+
+test('Dirección configura las sugerencias del catálogo sin alterar las fichas existentes', async () => {
+  const path = '/catalog-values';
+  const input = { kind:'instrument',label:'Flauta travesera' };
+  assert.equal((await musician(path,'POST',input)).status,403);
+  const added = await director(path,'POST',input);
+  assert.equal(added.status,201);
+  assert.equal((await director(path,'POST',{ ...input,label:'FLÁUTA TRAVESERA' })).status,409);
+  assert.ok((await client()('/session')).data.catalogValues.some(value => value.id === added.data.id));
+  assert.equal((await director(path + '/' + added.data.id,'DELETE',{})).status,200);
+  assert.ok(!(await musician('/dashboard')).data.catalogValues.some(value => value.id === added.data.id));
+  assert.equal((await musician('/session')).data.member.instrument,'Corneta');
+});
+
+test('edición de obras, PDF privado, duplicados, validación por Dirección y baja', async () => {
   work = (await admin('/works','POST',{ title:'Obra',authors:'Autor; Otra autora',genre:'Marcha' })).data;
   const update = { title:'Obra revisada',authors:'Autor; Otra autora',genre:'Marcha' };
   assert.equal((await musician('/works/' + work.id,'PUT',update)).status,403);
@@ -327,7 +482,9 @@ test('edición de obras, PDF privado, duplicados, validación por administració
   assert.equal((await musician(file + '/approve','PUT',{})).status,403);
   assert.equal((await admin(file + '/approve','PUT',{})).status,200);
   assert.equal((await musician(file)).type,'application/pdf');
-  await db.prepare("UPDATE members SET status = 'inactive' WHERE id = ?").run(ids.musician);
+  assert.equal((await director('/management/members/' + ids.musician + '/deactivate','POST',{})).status,200);
+  assert.equal((await musician(file)).status,401);
+  assert.equal((await musician('/login','POST',{ email:'musician@test.invalid',password:secret })).status,200);
   assert.equal((await musician(file)).status,403);
   assert.equal((await musician('/dashboard')).status,403);
 });

@@ -56,7 +56,7 @@ const signIn = (client,name) => client('/login','POST',{ email:name + '@test.inv
 
 before(async () => {
   const hash = await hashPassword(password);
-  for (const [id,role] of [['admin','admin'],['member','musician'],['another','musician'],['director','director']]) {
+  for (const [id,role] of [['admin','director'],['member','musician'],['another','musician'],['director','director']]) {
     await db.prepare(`
       INSERT INTO members(id,email,password,name,instrument,voice,role,status,created_at)
       VALUES (?, ?, ?, ?, 'Corneta', '', ?, 'active', ?)
@@ -117,6 +117,23 @@ test('no fusiona por correo y la vinculación requiere contraseña, sesión y co
   assert.equal((await other('/dashboard')).data.member.id,'member');
   claims.set('damaged',{ ...claims.get(token), firebase:{ sign_in_provider:'google.com',identities:{ 'google.com':['different'] } } });
   assert.equal((await google(browser(),'damaged')).status,409);
+});
+
+test('una solicitud de Google puede vincularse a la ficha previa sin perder la identidad', async () => {
+  const director = browser();
+  assert.equal((await signIn(director,'director')).status,200);
+  const roster = await director('/management/members','POST',{ name:'Ficha de Google',instrument:'Trompeta' });
+  assert.equal(roster.status,201);
+  const user = browser();
+  const token = identity('roster','ficha@google.example');
+  assert.equal((await google(user,token,'register',{ name:'Solicitud de Google',instrument:'Corneta' })).status,200);
+  const pending = (await user('/session')).data.member;
+  assert.equal((await director('/requests/' + pending.id,'PUT',{ status:'active',memberId:roster.data.id })).status,200);
+  const member = (await user('/session')).data.member;
+  assert.deepEqual([member.id,member.instrument,member.google_linked,member.password_enabled],[roster.data.id,'Trompeta',1,0]);
+  const fresh = browser();
+  assert.equal((await google(fresh,token)).status,200);
+  assert.equal((await fresh('/session')).data.member.id,roster.data.id);
 });
 
 test('las claves VAPID deben corresponder al mismo par', () => {

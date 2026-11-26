@@ -1,9 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { body, choice, HttpError, json, requireThat, text } from './http.mjs';
+import { body, HttpError, json, requireThat, text } from './http.mjs';
 import { checkPassword, endSession, expiredCookie, getMember, hashPassword, sessionCookie, startSession, tokenHash } from './security.mjs';
-import { attendanceReport, audit, calendarFile, cancelEvent, eventById, eventDetail, eventList, notify, saveEvent, saveIntention, savePresence, sendDueReminders } from './events.mjs';
+import { attendanceReport, calendarFile, cancelEvent, eventById, eventDetail, eventList, notify, saveEvent, saveIntention, savePresence, sendDueReminders } from './events.mjs';
 import { canManage, managementRoles } from '../src/roles.js';
-import { catalog, saveWork, servePdf, approveScore, uploadPdf } from './music.mjs';
+import { catalog, saveWork, servePdf, approveScore, discardScore, exportScores, uploadPdf } from './music.mjs';
+import { deactivateMember, reviewMember, saveMember } from './members.mjs';
+import { changeMaterial, materialDirectory, saveMaterial } from './material.mjs';
+import { catalogValues, removeCatalogValue, saveCatalogValue } from './catalog-values.mjs';
 import { formation, saveFormation, saveTemplate } from './formations.mjs';
 import { transaction } from './store.mjs';
 import { createAccountMail } from './account-mail.mjs';
@@ -40,26 +43,9 @@ function password(value, min) {
   return value;
 }
 
-async function review(db, actor, id, input) {
-  const status = choice(input.status, ['active','rejected'], 'Resolución');
-  return transaction(db, async () => {
-    if (status === 'active') {
-      const pending = await db.prepare("SELECT requires_email_verification, email_verified_at FROM members WHERE id = ? AND status = 'pending'").get(id);
-      requireThat(!pending?.requires_email_verification || pending.email_verified_at, 409, 'El solicitante aún debe confirmar su correo.');
-    }
-    const result = await db.prepare(`
-      UPDATE members SET status = ?, reviewed_at = ?, reviewed_by = ?
-      WHERE id = ? AND status = 'pending'
-    `).run(status, now(), actor.id, id);
-    requireThat(result.changes, 409, 'La solicitud ya no está pendiente.');
-    await audit(db, actor.id, 'access.' + status, id);
-    return { status };
-  });
-}
-
 async function dashboard(db, member) {
   await sendDueReminders(db);
-  const [notices,events,works] = await Promise.all([
+  const [notices,events,works,options] = await Promise.all([
     db.prepare(`
       SELECT n.id, n.title, n.message, n.created_at, n.event_id, i.read_at
       FROM notices n JOIN inbox i ON i.notice_id = n.id
@@ -67,8 +53,9 @@ async function dashboard(db, member) {
     `).all(member.id),
     eventList(db, member),
     catalog(db, member),
+    catalogValues(db),
   ]);
-  return { member, events, notices, works, updatedAt: now() };
+  return { member, events, notices, works, catalogValues:options, updatedAt: now() };
 }
 
 export function createApi(db, { sendMail, accountClock, google, push, publicSite, background } = {}) {
@@ -97,7 +84,7 @@ export function createApi(db, { sendMail, accountClock, google, push, publicSite
 
     if (method === 'GET' && pathname === '/api/session') {
       return json(response, 200, { member: publicAccount(member), google: google?.config ?? null,
-        pushEnabled: Boolean(push), mailEnabled:Boolean(accountMail) });
+        pushEnabled: Boolean(push), mailEnabled:Boolean(accountMail), catalogValues:await catalogValues(db) });
     }
 
     if (method === 'POST' && pathname === '/api/logout') {
@@ -222,8 +209,46 @@ export function createApi(db, { sendMail, accountClock, google, push, publicSite
       return json(response, 200, { members });
     }
 
-    let route = pathname.match(/^\/api\/requests\/([\w-]+)$/);
-    if (route && method === 'PUT') return json(response, 200, await review(db, member, route[1], await inputFor(managementRoles)));
+    if (method === 'POST' && pathname === '/api/management/members') {
+      return json(response, 201, await saveMember(db, member, await inputFor(managementRoles)));
+    }
+    const memberRoute = pathname.match(/^\/api\/management\/members\/([\w-]+)(\/deactivate)?$/);
+    if (memberRoute) {
+      const [, id, deactivate] = memberRoute;
+      if (method === 'PUT' && !deactivate) {
+        return json(response, 200, await saveMember(db, member, await inputFor(managementRoles), id));
+      }
+      if (method === 'POST' && deactivate) {
+        await inputFor(managementRoles);
+        return json(response, 200, await deactivateMember(db, id, member.id));
+      }
+    }
+
+    if (pathname === '/api/material') {
+      if (method === 'GET') {
+        requireThat(canManage(member.role), 403, 'Tu perfil no puede consultar el material.');
+        return json(response, 200, await materialDirectory(db));
+      }
+      if (method === 'POST') return json(response, 201, await saveMaterial(db,member,await inputFor(managementRoles)));
+    }
+    if (method === 'POST' && pathname === '/api/catalog-values') {
+      return json(response,201,await saveCatalogValue(db,member,await inputFor(managementRoles)));
+    }
+    let route = pathname.match(/^\/api\/catalog-values\/([\w-]+)$/);
+    if (route && method === 'DELETE') {
+      await inputFor(managementRoles);
+      return json(response,200,await removeCatalogValue(db,member,route[1]));
+    }
+    route = pathname.match(/^\/api\/material\/([\w-]+)(?:\/(loan|return|archive|restore))?$/);
+    if (route && method === 'PUT' && !route[2]) {
+      return json(response,200,await saveMaterial(db,member,await inputFor(managementRoles),route[1]));
+    }
+    if (route && method === 'POST' && route[2]) {
+      return json(response,200,await changeMaterial(db,member,route[1],route[2],await inputFor(managementRoles)));
+    }
+
+    route = pathname.match(/^\/api\/requests\/([\w-]+)$/);
+    if (route && method === 'PUT') return json(response, 200, await reviewMember(db, member, route[1], await inputFor(managementRoles)));
     if (method === 'POST' && pathname === '/api/events') {
       return json(response, 201, await saveEvent(db, member, await inputFor(managementRoles)));
     }
@@ -269,7 +294,7 @@ export function createApi(db, { sendMail, accountClock, google, push, publicSite
 
     if (method === 'GET' && pathname === '/api/notices/audience') {
       requireThat(canManage(member.role),403,'Tu perfil no puede consultar los destinatarios.');
-      const result = await db.prepare("SELECT count(*) AS total FROM members WHERE status = 'active'").get();
+      const result = await db.prepare("SELECT count(*) AS total FROM members WHERE status = 'active' AND email IS NOT NULL").get();
       return json(response,200,result);
     }
     if (method === 'POST' && pathname === '/api/notices') {
@@ -308,12 +333,22 @@ export function createApi(db, { sendMail, accountClock, google, push, publicSite
     if (route && method === 'POST') {
       return json(response, 201, await uploadPdf(db, member, await inputFor(managementRoles, pdfLimit), { workId: route[1] }));
     }
-    route = pathname.match(/^\/api\/files\/([\w-]+)(\/approve)?$/);
+    if (method === 'POST' && pathname === '/api/scores/export') {
+      return await exportScores(db,request,response,member,await inputFor(null,360000));
+    }
+    route = pathname.match(/^\/api\/files\/([\w-]+)(?:\/(approve|replace))?$/);
     if (route) {
       if (!route[2] && method === 'GET') return await servePdf(db, member, route[1], response);
-      if (route[2] && method === 'PUT') {
+      if (!route[2] && method === 'DELETE') {
+        await inputFor(managementRoles);
+        return json(response, 200, await discardScore(db,member,route[1]));
+      }
+      if (route[2] === 'approve' && method === 'PUT') {
         await inputFor(managementRoles);
         return json(response, 200, await approveScore(db, member, route[1]));
+      }
+      if (route[2] === 'replace' && method === 'POST') {
+        return json(response, 201, await uploadPdf(db,member,await inputFor(managementRoles,pdfLimit),{ replacesId:route[1] }));
       }
     }
     throw new HttpError(404, 'Ruta no encontrada.');
@@ -323,7 +358,7 @@ export function createApi(db, { sendMail, accountClock, google, push, publicSite
     try {
       await handle(request, response, pathname, expectedOrigin);
     } catch (error) {
-      if (error instanceof HttpError) return json(response, error.status, { error: error.message, code: error.code });
+      if (error instanceof HttpError && !response.headersSent) return json(response, error.status, { error: error.message, code: error.code });
       console.error(error);
       if (!response.headersSent) return json(response, 500, { error: 'No se pudo completar la operación.' });
       response.destroy();

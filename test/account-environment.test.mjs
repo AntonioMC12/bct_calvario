@@ -23,13 +23,19 @@ test('la migración conserva las membresías activas y las solicitudes de v1', a
     `);
     insert.run('a','a@ejemplo.invalid','Miembro','active');
     insert.run('b','b@ejemplo.invalid','Solicitante','pending');
+    db.exec("UPDATE members SET role = 'admin' WHERE id = 'a'");
+    db.exec("INSERT INTO events(id,title,type,starts,ends,location,town,meeting,description) VALUES ('e','Ensayo','Ensayo','2026-11-24','2026-11-25','','','','');");
+    db.exec("INSERT INTO presence VALUES ('e','a','present','a','2026-11-24');");
     db.close();
     db = openDatabase(filename);
-    assert.equal(db.prepare('PRAGMA user_version').get().user_version,3);
+    assert.equal(db.prepare('PRAGMA user_version').get().user_version,5);
+    assert.equal(db.prepare('PRAGMA foreign_keys').get().foreign_keys,1);
     const rows = db.prepare('SELECT status, email_verified_at, requires_email_verification FROM members ORDER BY id').all();
     assert.deepEqual(rows.map(row => [row.status,row.email_verified_at,row.requires_email_verification]),
       [['active',null,0],['pending',null,0]]);
     assert.equal(db.prepare('SELECT count(*) AS total FROM account_tokens').get().total,0);
+    assert.equal(db.prepare("SELECT value FROM presence WHERE member_id = 'a'").get().value,'present');
+    assert.equal(db.prepare("SELECT role FROM members WHERE id = 'a'").get().role,'director');
   } finally {
     if (db?.isOpen) db.close();
     for (const suffix of ['','-wal','-shm']) await rm(filename + suffix,{ force:true });

@@ -44,7 +44,8 @@ export async function getMember(db, request) {
     SELECT m.id, email, name, instrument, voice, role, status, email_verified_at, requires_email_verification,
       password_enabled, CASE WHEN EXISTS (SELECT 1 FROM google_identities g WHERE g.member_id = m.id)
         THEN 1 ELSE 0 END AS google_linked
-    FROM sessions s JOIN members m ON m.id = s.member_id WHERE s.token = ? AND s.expires > ?
+    FROM sessions s JOIN members m ON m.id = s.member_id
+    WHERE s.token = ? AND s.expires > ? AND m.email IS NOT NULL
   `).get(tokenHash(request), Date.now());
 }
 

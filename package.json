@@ -22,8 +22,10 @@
     "test:postgres": "node scripts/test-postgres.mjs"
   },
   "dependencies": {
+    "fflate": "0.8.2",
     "firebase-admin": "14.5.1",
     "nodemailer": "10.6.1",
+    "pdf-lib": "1.17.1",
     "pg": "8.23.1",
     "web-push": "4.0.0"
   },
