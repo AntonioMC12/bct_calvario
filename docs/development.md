@@ -2,6 +2,17 @@
 
 El [estado y los pendientes de Calvario](estado-y-pendientes.md) recoge la cobertura actual y los requisitos añadidos el 26 de noviembre de 2026. Las entradas siguientes conservan el historial de cada entrega.
 
+## 2026-11-26 · Lista de presencia por convocatoria
+
+- Dirección puede activar «Pasar lista» al crear o editar un evento. La opción viene marcada en ensayos nuevos. Las convocatorias existentes conservan la lista habilitada y las presencias registradas. Una lista con marcas de presencia debe mantenerse habilitada.
+- El botón del evento abre el registro para todos los miembros activos, incluidos los que no tienen cuenta. En las convocatorias futuras muestra la hora a la que se abre la lista. Gestión agrupa las listas disponibles y las futuras. El informe usa los eventos iniciados y vigentes con lista habilitada y apila los campos de fecha en móviles estrechos.
+- Se añaden las migraciones SQLite 006 y PostgreSQL 004 y el paquete `upgrade-from-v3.sql`. Pasaron `npm run check`, 30 pruebas generales y 26 de PostgreSQL local. Se ejecutó el SQL de instalación y de actualización desde PostgreSQL 3 en bases aisladas. En la demo se creó un ensayo, se registró presencia desde su detalle y se comprobó el informe a 320 px.
+
+## 2026-11-26 · Partituras desplegables en el detalle de obra
+
+- El detalle muestra una fila plegada por partitura con instrumento, voz, tamaño y estado. Al abrirla se ven el nombre del archivo y sus acciones. Las versiones anteriores conservan su propia sección y los permisos siguen aplicándose al listado y a las acciones.
+- Los recursos de la PWA se revalidan al recargar con conexión y se sirven desde la caché cuando falla la red. La caché pasa a `v22`. Se probó en la demo una obra con tres partes, la apertura con teclado, el guardado con la fila abierta, los permisos por rol y la recarga sin conexión. Pasaron `npm run check` y las 29 pruebas.
+
 ## 2026-11-26 · Repertorio desplegable por obras
 
 - Cada obra tiene una ficha desplegable con título, autoría y recuento de las partituras visibles. Las partes aparecen ordenadas por instrumento y voz. Dirección abre el catálogo completo por defecto y puede volver a «Mis partituras». El repertorio del músico mantiene el filtro de instrumento y voz. La ficha «Ver obra» permite consultar el detalle y, para Dirección, el historial de versiones.

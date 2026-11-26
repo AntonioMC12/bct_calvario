@@ -8,7 +8,7 @@ export { postgresStore };
 
 const adapters = new WeakMap();
 const postgresMigrations = [
-  '001-initial.sql', '002-roster-members.sql', '003-management-material-scores.sql',
+  '001-initial.sql', '002-roster-members.sql', '003-management-material-scores.sql', '004-event-roll-call.sql',
 ];
 
 export function sqliteStore(database) {

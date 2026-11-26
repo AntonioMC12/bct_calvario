@@ -41,8 +41,9 @@ export async function sendDueReminders(db, timestamp = now()) {
   });
 }
 
-export async function eventById(db, id) {
-  const event = await db.prepare('SELECT * FROM events WHERE id = ?').get(id);
+export async function eventById(db, id, { lock = false } = {}) {
+  const event = await db.prepare('SELECT * FROM events WHERE id = ?' +
+    (lock && db.dialect === 'postgres' ? ' FOR UPDATE' : '')).get(id);
   requireThat(event, 404, 'No se encuentra el evento.');
   return event;
 }
@@ -92,7 +93,7 @@ export async function attendanceReport(db, input) {
   const rows = await db.prepare(`
     WITH selected_events AS (
       SELECT id, title, type, starts FROM events
-      WHERE cancelled = 0 AND starts >= ? AND starts < ? AND starts <= ? AND (? = '' OR type = ?)
+      WHERE cancelled = 0 AND roll_call = 1 AND starts >= ? AND starts < ? AND starts <= ? AND (? = '' OR type = ?)
     ), marks AS (
       SELECT i.event_id, i.member_id FROM intentions i JOIN selected_events e ON e.id = i.event_id
       UNION
@@ -125,26 +126,32 @@ export async function saveEvent(db, actor, input, id) {
   const meeting = text(input.meeting, 200, 'Punto de encuentro');
   const description = text(input.description, 3000, 'Descripción');
   const minutes = input.reminder_minutes == null ? null : integer(input.reminder_minutes, 1, 10080, 'Antelación');
+  requireThat(input.roll_call === undefined || typeof input.roll_call === 'boolean', 422, 'La opción de pasar lista no es válida.');
 
   return transaction(db, async () => {
     if (!id) {
       id = randomUUID();
       await db.prepare(`
-        INSERT INTO events(id, title, type, starts, ends, location, town, meeting, description, reminder_minutes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(id, title, type, starts, ends, location, town, meeting, description, minutes);
+        INSERT INTO events(id, title, type, starts, ends, location, town, meeting, description, reminder_minutes, roll_call)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, title, type, starts, ends, location, town, meeting, description, minutes, Number(input.roll_call ?? true));
       await notify(db, 'Nueva convocatoria', title, id, actor.id);
       await audit(db, actor.id, 'event.create', id);
     } else {
-      const event = await eventById(db, id);
+      const event = await eventById(db, id, { lock:true });
       requireThat(!event.cancelled, 409, 'El evento está cancelado.');
       requireThat(input.version === event.version, 409, 'El evento cambió. Vuelve a abrirlo para editarlo.');
       const timeChanged = event.starts !== starts || event.ends !== ends;
       const reminderSent = event.starts === starts && event.reminder_minutes === minutes ? event.reminder_sent : 0;
+      const rollCall = Number(input.roll_call ?? event.roll_call);
+      if (event.roll_call && !rollCall) {
+        const marks = await db.prepare("SELECT 1 FROM presence WHERE event_id = ? AND value <> 'unset' LIMIT 1").get(id);
+        requireThat(!marks, 409, 'Este evento ya tiene presencias registradas y debe conservar la lista.');
+      }
       await db.prepare(`
         UPDATE events SET title = ?, type = ?, starts = ?, ends = ?, location = ?, town = ?, meeting = ?,
-          description = ?, reminder_minutes = ?, reminder_sent = ?, version = version + 1 WHERE id = ?
-      `).run(title, type, starts, ends, location, town, meeting, description, minutes, reminderSent, id);
+          description = ?, reminder_minutes = ?, reminder_sent = ?, roll_call = ?, version = version + 1 WHERE id = ?
+      `).run(title, type, starts, ends, location, town, meeting, description, minutes, reminderSent, rollCall, id);
       if (timeChanged) await notify(db, 'Cambio de horario', title + ' tiene un nuevo horario. Consulta la convocatoria.', id, actor.id);
       await audit(db, actor.id, 'event.update', id);
     }
@@ -154,7 +161,7 @@ export async function saveEvent(db, actor, input, id) {
 
 export async function cancelEvent(db, actor, id, version) {
   return transaction(db, async () => {
-    const event = await eventById(db, id);
+    const event = await eventById(db, id, { lock:true });
     if (event.cancelled) return event;
     requireThat(event.version === version, 409, 'El evento cambió. Revisa la convocatoria antes de cancelarla.');
     await db.prepare('UPDATE events SET cancelled = 1, version = version + 1 WHERE id = ?').run(id);
@@ -199,7 +206,8 @@ export async function saveIntention(db, actor, eventId, memberId, input) {
 
 export async function savePresence(db, actor, eventId, input) {
   return transaction(db, async () => {
-    const event = await eventById(db, eventId);
+    const event = await eventById(db, eventId, { lock:true });
+    requireThat(event.roll_call, 409, 'La lista de presencia no está habilitada para este evento.');
     requireThat(!event.cancelled && event.starts <= now(), 409,
       'La lista de presencia se abre al empezar un evento sin cancelar.');
     requireThat(Array.isArray(input.rows) && input.rows.length <= 1000, 422, 'Lista de presencia no válida.');

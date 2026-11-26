@@ -1,0 +1,1 @@
+ALTER TABLE events ADD COLUMN roll_call INTEGER NOT NULL DEFAULT 1 CHECK (roll_call IN (0,1));

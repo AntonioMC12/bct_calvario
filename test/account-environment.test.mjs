@@ -28,7 +28,7 @@ test('la migración conserva las membresías activas y las solicitudes de v1', a
     db.exec("INSERT INTO presence VALUES ('e','a','present','a','2026-11-24');");
     db.close();
     db = openDatabase(filename);
-    assert.equal(db.prepare('PRAGMA user_version').get().user_version,5);
+    assert.equal(db.prepare('PRAGMA user_version').get().user_version,6);
     assert.equal(db.prepare('PRAGMA foreign_keys').get().foreign_keys,1);
     const rows = db.prepare('SELECT status, email_verified_at, requires_email_verification FROM members ORDER BY id').all();
     assert.deepEqual(rows.map(row => [row.status,row.email_verified_at,row.requires_email_verification]),

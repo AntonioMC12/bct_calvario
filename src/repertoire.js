@@ -9,6 +9,8 @@ let scope = 'all';
 let query = '';
 let genre = '';
 const canManageScores = state => !state.offline && canManage(state.member.role);
+const comparePart = new Intl.Collator('es',{ numeric:true, sensitivity:'base' }).compare;
+const byScorePart = (a,b) => comparePart(a.instrument,b.instrument) || comparePart(a.voice,b.voice) || comparePart(a.name,b.name);
 
 export function repertoire(content, ctx, id, action) {
   if (id === 'archivo') return archive(content,ctx);
@@ -42,13 +44,12 @@ export function repertoire(content, ctx, id, action) {
   const genreControl = content.querySelector('[name="genre"]');
   const tabs = content.querySelector('.segments');
   const list = content.querySelector('#works');
-  const byPart = new Intl.Collator('es',{ numeric:true, sensitivity:'base' }).compare;
   const visible = () => state.data.works
     .filter(work => (!genre || genre === work.genre) &&
       normalize(work.title + ' ' + work.authors + ' ' + work.genre).includes(normalize(query)))
     .map(work => ({ ...work, scores:work.scores.filter(file => currentScope() === 'all' ?
       !file.archived && (file.approved || canManageScores(state)) : matchesScore(file,state.member))
-      .sort((a,b) => byPart(a.instrument,b.instrument) || byPart(a.voice,b.voice) || byPart(a.name,b.name)) }))
+      .sort(byScorePart) }))
     .filter(work => work.scores.length);
 
   function show() {
@@ -156,16 +157,21 @@ function downloadSelection(content,ctx) {
   draw();
 }
 
-function scoreRow(file, ctx) {
-  const { state } = ctx;
+function scoreStatus(file, state) {
   const saved = state.saved.has(file.id);
   const status = file.archived ? 'Versión anterior' : !file.approved ? 'Pendiente de validación' :
     saved ? 'Guardada en este dispositivo' : 'Disponible en línea';
+  return pill(status, file.archived ? '' : !file.approved ? 'waiting' : saved ? 'good' : 'info');
+}
+
+function scoreSize(file) {
   const size = new Intl.NumberFormat('es-ES',{ maximumFractionDigits:1 }).format(file.bytes / 1024);
-  return '<div class="score-row"><span class="tile">' + icon('file') + '</span><div class="row-copy"><strong>' +
-    [file.instrument,file.voice].filter(Boolean).map(esc).join(' · ') + '</strong><span class="muted">PDF · ' + size + ' KB</span><div>' +
-    pill(status, !file.approved ? 'waiting' : saved ? 'good' : file.archived ? '' : 'info') + '</div></div><div class="score-actions">' +
-    (!state.offline ? '<a class="button quiet" href="/api/files/' + file.id + '" target="_blank" rel="noopener">' +
+  return 'PDF · ' + size + ' KB';
+}
+
+function scoreActions(file, state) {
+  const saved = state.saved.has(file.id);
+  return (!state.offline ? '<a class="button quiet" href="/api/files/' + file.id + '" target="_blank" rel="noopener">' +
       icon('file') + 'Abrir PDF</a>' : '') +
     (saved ? button('Abrir PDF guardado','secondary','data-open="' + file.id + '"') +
       button('Exportar copia guardada','secondary','data-download="' + file.id + '"') :
@@ -173,7 +179,24 @@ function scoreRow(file, ctx) {
     (!file.approved && canManageScores(state) ?
       button('Validar distribución','secondary','data-approve="' + file.id + '"') +
       button('Descartar PDF','quiet','data-discard="' + file.id + '"') : '') +
-    (state.offline && !saved ? '<span class="muted">Necesitas conexión.</span>' : '') + '</div></div>';
+    (state.offline && !saved ? '<span class="muted">Necesitas conexión.</span>' : '');
+}
+
+function scoreRow(file, { state }) {
+  return '<div class="score-row"><span class="tile">' + icon('file') + '</span><div class="row-copy"><strong>' +
+    instrument(file) + '</strong><span class="muted">' + scoreSize(file) + '</span><div>' +
+    scoreStatus(file,state) + '</div></div><div class="score-actions">' + scoreActions(file,state) + '</div></div>';
+}
+
+function scoreDisclosure(file, state, open, replace) {
+  return '<details class="score-disclosure" data-score="' + esc(file.id) + '"' + (open ? ' open' : '') +
+    '><summary class="score-summary"><span class="tile">' + icon('file') + '</span>' +
+    '<span class="score-summary-copy"><strong>' + (instrument(file) || esc(file.name)) +
+    '</strong><span class="muted">' + scoreSize(file) + '</span>' + scoreStatus(file,state) + '</span>' +
+    '<span class="score-chevron">' + icon('right') + '</span></summary>' +
+    '<div class="score-disclosure-body"><p class="muted">' + esc(file.name) + '</p><div class="score-actions">' +
+    scoreActions(file,state) + (replace ? actionLink('Subir nueva versión','#/repertorio/reemplazo/' + file.id,'upload') : '') +
+    '</div></div></details>';
 }
 
 function validation(content,ctx) {
@@ -201,24 +224,18 @@ function workPage(content,ctx,id) {
     content.innerHTML = previous + empty('Obra no encontrada.');
     return;
   }
-  const mine = work.scores.filter(file => matchesScore(file,state.member));
-  if (!canManage(state.member.role)) {
-    content.innerHTML = previous + header(work.title,[work.authors,work.genre].filter(Boolean).join(' · ')) +
-      '<div class="row-list">' + mine.map(file => scoreRow(file,ctx)).join('') + '</div>';
-    bindScores(content,ctx,mine,() => workPage(content,ctx,id));
-    return;
-  }
-  const current = work.scores.filter(file => !file.archived);
-  const archived = work.scores.filter(file => file.archived);
+  const manager = canManage(state.member.role);
+  const current = work.scores.filter(file => manager ? !file.archived : matchesScore(file,state.member)).sort(byScorePart);
+  const archived = manager ? work.scores.filter(file => file.archived).sort(byScorePart) : [];
+  const expanded = new Set([...content.querySelectorAll('.score-disclosure[open]')].map(item => item.dataset.score));
   content.innerHTML = previous + header(work.title,[work.authors,work.genre].filter(Boolean).join(' · ')) +
-    '<section>' + sectionTitle('Partituras') + (current.length ? '<div class="row-list">' + current.map(file =>
-      '<div class="card stack"><p class="muted">' + esc(file.name) + '</p>' + scoreRow(file,ctx) +
-      (canManageScores(state) && file.approved && !current.some(item => item.replaces_id === file.id) ?
-        actionLink('Subir nueva versión','#/repertorio/reemplazo/' + file.id,'upload') : '') + '</div>').join('') + '</div>' :
+    '<section>' + sectionTitle('Partituras','', '',pill(current.length)) + (current.length ? '<div class="row-list">' +
+      current.map(file => scoreDisclosure(file,state,expanded.has(file.id),
+        canManageScores(state) && file.approved && !current.some(item => item.replaces_id === file.id))).join('') + '</div>' :
       empty('Aún no hay partituras para esta obra.')) + '</section>' + (archived.length ?
       '<section>' + sectionTitle('Versiones anteriores') + '<div class="row-list">' + archived.map(file =>
-        '<div class="card stack"><p class="muted">' + esc(file.name) + '</p>' + scoreRow(file,ctx) + '</div>').join('') + '</div></section>' : '');
-  bindScores(content,ctx,work.scores,() => workPage(content,ctx,id));
+        scoreDisclosure(file,state,expanded.has(file.id),false)).join('') + '</div></section>' : '');
+  bindScores(content,ctx,[...current,...archived],() => workPage(content,ctx,id));
 }
 
 function replacement(content,ctx,id) {

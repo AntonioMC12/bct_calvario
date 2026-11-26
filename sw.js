@@ -1,6 +1,6 @@
 const app = new URL(self.registration.scope);
 const cachePrefix = 'calvario-shell-' + app.pathname + ':';
-const SHELL = cachePrefix + 'v21';
+const SHELL = cachePrefix + 'v22';
 const pushCache = 'calvario-device-push' + (app.pathname === '/' ? '' : app.pathname);
 const pushBinding = new URL('_calvario-push-binding',app).href;
 const assets = ['/', '/manifest.webmanifest', '/public/escudo.png', '/public/escudo_calvario_vector.svg', '/public/icon-192.png', '/public/icon-512.png',
@@ -13,7 +13,7 @@ const assets = ['/', '/manifest.webmanifest', '/public/escudo.png', '/public/esc
 const assetPaths = new Set(assets);
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(SHELL).then(cache => cache.addAll(assets)));
+  event.waitUntil(caches.open(SHELL).then(cache => cache.addAll(assets.map(url => new Request(url,{ cache:'reload' })))));
 });
 
 self.addEventListener('activate', event => {
@@ -24,7 +24,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET' || url.origin !== location.origin || !assetPaths.has(url.origin + url.pathname)) return;
-  event.respondWith(fetch(event.request).catch(async () => {
+  event.respondWith(fetch(event.request,{ cache:'no-cache' }).catch(async () => {
     const cache = await caches.open(SHELL);
     return (await cache.match(url.origin + url.pathname)) ?? Response.error();
   }));

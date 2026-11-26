@@ -34,7 +34,7 @@ npx supabase login
 npx supabase db query --remote=vsmmpccqaywetuiyhevm --read-only "SELECT to_regnamespace('calvario') AS schema, to_regclass('calvario.schema_version') AS version_table;"
 ```
 
-Si el esquema está libre, inicialízalo con `dist/piloto/edge/schema.sql`. Si ya existe, consulta `calvario.schema_version`. Para actualizar a la versión 3, haz una copia y sustituye el archivo de la primera orden por `dist/piloto/edge/upgrade-from-v1.sql` o `dist/piloto/edge/upgrade-from-v2.sql`, según la versión instalada. Si ya está en la versión 3, pasa al despliegue de la función.
+Si el esquema está libre, inicialízalo con `dist/piloto/edge/schema.sql`. Si ya existe, consulta `calvario.schema_version`. Para actualizar a la versión 4, haz una copia y usa el archivo `upgrade-from-v1.sql`, `upgrade-from-v2.sql` o `upgrade-from-v3.sql` de `dist/piloto/edge`, según la versión instalada. Si ya está en la versión 4, pasa al despliegue de la función.
 
 ```powershell
 npx supabase db query --remote=vsmmpccqaywetuiyhevm --file dist/piloto/edge/schema.sql --yes
@@ -82,7 +82,7 @@ Firebase sigue verificando el acceso con Google. Node.js aplica los permisos, si
 
 ### Migrar una base SQLite existente
 
-Detén la instancia que escribe en SQLite durante el cambio o utiliza una copia coherente del archivo de esquema 3, 4 o 5. Prepara primero un destino vacío con `npm run db:setup`, y luego ejecuta:
+Detén la instancia que escribe en SQLite durante el cambio o utiliza una copia coherente del archivo de esquema 3, 4, 5 o 6. Prepara primero un destino vacío con `npm run db:setup`, y luego ejecuta:
 
 ```sh
 npm run db:import -- data/copias/antes-supabase.sqlite

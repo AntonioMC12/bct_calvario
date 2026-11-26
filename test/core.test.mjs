@@ -254,6 +254,28 @@ test('intención, reintento idempotente, corrección y privacidad', async () => 
   assert.equal((await roster(director)).intention,'yes');
 });
 
+test('la lista se puede habilitar por evento y conserva las presencias registradas', async () => {
+  const disabled = await director('/events','POST',{ ...previous, title:'Convocatoria sin lista', roll_call:false });
+  assert.equal(disabled.status,201);
+  assert.equal(disabled.data.roll_call,0);
+  const path = '/events/' + disabled.data.id;
+  const marks = { rows:[{ id:ids.musician, value:'present' }] };
+  assert.equal((await director(path + '/presence','PUT',marks)).status,409);
+  const date = previous.starts.slice(0,10);
+  let report = await director('/reports/attendance','POST',{ from:date,to:date });
+  assert.ok(report.data.rows.every(row => row.id !== disabled.data.id));
+  const enabled = await director(path,'PUT',{ ...previous, version:disabled.data.version, roll_call:true });
+  assert.equal(enabled.status,200);
+  assert.equal(enabled.data.roll_call,1);
+  assert.equal((await musician(path + '/presence','PUT',marks)).status,403);
+  assert.equal((await director(path + '/presence','PUT',marks)).status,200);
+  assert.equal((await director(path,'PUT',{ ...previous,version:enabled.data.version,roll_call:false })).status,409);
+  report = await director('/reports/attendance','POST',{ from:date,to:date });
+  assert.ok(report.data.rows.some(row => row.id === disabled.data.id && row.present === 1));
+  const futureRoll = await director('/events','POST',{ ...future,roll_call:true });
+  assert.equal((await director('/events/' + futureRoll.data.id + '/presence','PUT',marks)).status,409);
+});
+
 test('presencia real independiente y cierre al inicio', async () => {
   const past = (await admin('/events','POST',previous)).data;
   const path = '/events/' + past.id;

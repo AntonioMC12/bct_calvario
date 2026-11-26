@@ -20,8 +20,8 @@ export async function importSqlite(destination,filename) {
   try {
     source.exec('BEGIN');
     const { user_version: version } = source.prepare('PRAGMA user_version').get();
-    if (![3,4,5].includes(version)) {
-      throw new Error('Usa una copia de SQLite con la versión de esquema 3, 4 o 5.');
+    if (![3,4,5,6].includes(version)) {
+      throw new Error('Usa una copia de SQLite con la versión de esquema 3, 4, 5 o 6.');
     }
     if (source.prepare('PRAGMA foreign_key_check').get()) throw new Error('La copia SQLite contiene relaciones no válidas.');
     return await destination.transaction(async () => {
