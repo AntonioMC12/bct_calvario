@@ -1,5 +1,5 @@
-import { area, attendanceBadge, back, bindForm, button, dateOnly, dayKey, empty, errorRegion, esc, eventCard, field, fullDate, header, icon,
-  instrument, intention, link, normalize, options, otherIntention, pill, presence, row, sectionTitle, segment, timeRange } from './ui.js';
+import { actionLink, area, attendanceBadge, back, bindForm, button, dateOnly, dayKey, empty, errorRegion, esc, eventCard, field, fullDate,
+  header, icon, instrument, intention, normalize, options, otherIntention, pill, presence, row, sectionTitle, segment, timeRange } from './ui.js';
 import { canManage } from './roles.js';
 
 const today = () => dayKey(new Date());
@@ -122,7 +122,7 @@ export async function eventPage(content, ctx, id, action) {
   const responses = (counts.yes ?? 0) + ' asistirán · ' + (counts.no ?? 0) + ' no asistirán · ' + (counts.unset ?? 0) + ' sin confirmar';
   content.innerHTML = '<div class="event-view">' + prev + '<div class="event-layout">' +
     '<section class="card stack event-overview">' + header(event.title, '',
-      manager(state) && !event.cancelled ? link('Editar',href + '/editar') : '', event.type) +
+      manager(state) && !event.cancelled ? actionLink('Editar',href + '/editar') : '', event.type) +
     (event.cancelled ? '<div class="callout"><strong>Evento cancelado</strong><p>La convocatoria se conserva en el historial.</p></div>' : '') +
     (event.description ? '<p class="pre">' + esc(event.description) + '</p>' : '') +
     '<div class="event-facts"><div class="info-line"><span class="tile">' + icon('clock') + '</span><div><strong>' + fullDate(event.starts) +

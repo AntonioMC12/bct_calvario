@@ -81,6 +81,8 @@ export function header(title, subtitle = '', action = '', eyebrow = '') {
 export const sectionTitle = (title, action = '', glyph = '', count = '') => '<div class="section-head"><h2>' +
   (glyph ? icon(glyph) : '') + '<span>' + esc(title) + '</span>' + count + '</h2>' + action + '</div>';
 export const link = (label, href) => '<a class="text-link" href="' + esc(href) + '">' + esc(label) + '</a>';
+export const actionLink = (label, href, glyph = 'right') => '<a class="button secondary section-action" href="' +
+  esc(href) + '"><span>' + esc(label) + '</span>' + icon(glyph) + '</a>';
 export const back = (label, href) => '<a class="back" href="' + esc(href) + '">' + icon('left') + esc(label) + '</a>';
 export const empty = message => '<p class="card empty muted">' + esc(message) + '</p>';
 export const pill = (label, tone = '') => '<span class="pill ' + tone + '">' + esc(label) + '</span>';

@@ -1,5 +1,5 @@
-import { area, back, bindForm, button, displayTime, empty, errorRegion, esc, field, header, icon, initials, instrument,
-  link, normalize, options, otherIntention, pill, role, row, sectionTitle } from './ui.js';
+import { actionLink, area, back, bindForm, button, displayTime, empty, errorRegion, esc, field, header, icon, initials, instrument,
+  normalize, options, otherIntention, pill, role, row, sectionTitle } from './ui.js';
 import { localMinute } from './time.js';
 import { canManage } from './roles.js';
 import { optionLists } from './part-options.js';
@@ -103,7 +103,7 @@ export async function management(content, ctx, mode, action) {
         button('Rechazar','secondary','data-choice="rejected"') +
         button('Aprobar','primary','data-choice="active"' +
           (member.requires_email_verification && !member.email_verified_at ? ' disabled' : '')) +
-        '</div>' + errorRegion + '</form>' : editableMember(member) ? link('Editar ficha',membersRoute + '/' + member.id) : '') +
+        '</div>' + errorRegion + '</form>' : editableMember(member) ? actionLink('Editar ficha',membersRoute + '/' + member.id) : '') +
       '</article>').join('') + '</div>' :
     empty(isRequest ? 'No hay solicitudes pendientes.' : 'No hay componentes en el directorio.'));
   const search = content.querySelector('[name="query"]');

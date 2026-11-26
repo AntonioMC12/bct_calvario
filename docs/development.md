@@ -2,6 +2,11 @@
 
 El [estado y los pendientes de Calvario](estado-y-pendientes.md) recoge la cobertura actual y los requisitos añadidos el 26 de noviembre de 2026. Las entradas siguientes conservan el historial de cada entrega.
 
+## 2026-11-26 · Botones de navegación y gestión
+
+- «Ver calendario», «Ver todos», «Repertorio» y «Descarga por lotes» tienen fondo, borde e icono. En la demo se revisaron los tamaños de móvil y escritorio y se abrieron los cuatro destinos. La caché de la PWA pasa a `v18`.
+- El mismo estilo se aplica a la edición de convocatorias, las fichas del Directorio y de Material, la sustitución de partituras y el regreso a Inicio desde un error. Se probaron en la demo las cuatro acciones de gestión. Pasaron `npm run check` y las 29 pruebas.
+
 ## 2026-11-26 · Acciones de Dirección en Repertorio
 
 - «Cargar partituras» y «Validar partituras» aparecen juntas sobre los filtros, con iconos y jerarquía de botón principal y secundario. En móviles estrechos se apilan. Se verificaron los dos destinos y la vista de músico en la demo. Pasaron las 29 pruebas de `npm test`.
