@@ -185,6 +185,16 @@ svg { display: block; }
 .event-overview .page-head { margin: 0; align-items: flex-start; }
 .event-overview { background: linear-gradient(138deg,var(--surface) 73%,var(--inset)); }
 .event-overview .page-head h1 { font: 750 clamp(1.55rem, 1.3rem + 1.2vw, 2.4rem)/1.2 var(--display); }
+.event-management { display: flex; align-items: stretch; gap: .55rem; }
+.event-management .button { min-height: 48px; padding-inline: .75rem; text-align: center; }
+.event-management .primary, .event-roll-status { flex: 1; min-width: 0; }
+.event-management .icon { width: 18px; height: 18px; flex: none; }
+.event-roll-status {
+  display: flex; align-items: center; gap: .55rem; padding: .4rem .65rem;
+  border-radius: 11px; background: var(--inset); font-size: .875rem;
+}
+.event-roll-status .icon { color: var(--gold); }
+.event-roll-status p { color: var(--stone); font-size: .8rem; }
 .event-facts { display: grid; gap: .75rem; padding: .8rem; background: var(--inset); border-radius: 12px; }
 .event-map { display: block; width: 100%; height: clamp(200px, 45vw, 315px); border: 1px solid var(--line);
   border-radius: 12px; background: var(--inset); }
@@ -432,10 +442,9 @@ input[type='radio'], input[type='checkbox'] { accent-color: var(--red); width: 1
 .report-dates input { display: block; inline-size: 100%; max-inline-size: 100%; }
 .report-dates input::-webkit-date-and-time-value { text-align: start; }
 .report-filter > .button { min-height: 48px; }
-.report-filter > .button .icon, .event-roll-action .icon { width: 18px; height: 18px; }
-.event-roll-call > span, .event-roll-action { display: grid; gap: .35rem; }
+.report-filter > .button .icon { width: 18px; height: 18px; }
+.event-roll-call > span { display: grid; gap: .35rem; }
 .event-roll-call > span .muted { font-weight: 400; }
-.event-roll-action .button { justify-content: center; }
 .report-empty h2 { margin-bottom: .35rem; }
 @media (max-width: 460px) {
   .report-dates { grid-template-columns: minmax(0,1fr); }

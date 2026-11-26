@@ -2,6 +2,11 @@
 
 El [estado y los pendientes de Calvario](estado-y-pendientes.md) recoge la cobertura actual y los requisitos añadidos el 26 de noviembre de 2026. Las entradas siguientes conservan el historial de cada entrega.
 
+## 2026-11-26 · Acceso a pasar lista en el detalle del evento
+
+- Dirección encuentra «Pasar lista» debajo del título, como acción principal junto a «Editar». Antes del inicio, su lugar muestra la hora de apertura. El ajuste es de interfaz y la caché de la PWA pasa a `v23`.
+- En la demo se comprobaron la disposición a 320, 390 y 1280 px, el acceso a edición, la apertura de la lista con teclado y la vista de músico. Pasaron `npm run check` y las 30 pruebas de `npm test`.
+
 ## 2026-11-26 · Lista de presencia por convocatoria
 
 - Dirección puede activar «Pasar lista» al crear o editar un evento. La opción viene marcada en ensayos nuevos. Las convocatorias existentes conservan la lista habilitada y las presencias registradas. Una lista con marcas de presencia debe mantenerse habilitada.
