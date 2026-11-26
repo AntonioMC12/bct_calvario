@@ -2,6 +2,11 @@
 
 El [estado y los pendientes de Calvario](estado-y-pendientes.md) recoge la cobertura actual y los requisitos añadidos el 26 de noviembre de 2026. Las entradas siguientes conservan el historial de cada entrega.
 
+## 2026-11-26 · Selectores y acciones superiores
+
+- «Mes / Lista» ocupa todo el ancho del calendario. Se comprobó la alineación en las dos vistas a 320, 390, 512 y 1280 px. Pasaron `npm run check` y las 29 pruebas. La caché de la PWA pasa a `v19`.
+- Avisos y Repertorio comparten el selector de ancho completo, con dos opciones del mismo tamaño y selección destacada. En móvil, «Nuevo aviso» y «Nuevo evento» llenan su fila. En Repertorio, la descarga queda debajo de las acciones de gestión y el buscador gana anchura en pantallas estrechas. Se probaron las tres pantallas a 320, 512 y 1280 px.
+
 ## 2026-11-26 · Botones de navegación y gestión
 
 - «Ver calendario», «Ver todos», «Repertorio» y «Descarga por lotes» tienen fondo, borde e icono. En la demo se revisaron los tamaños de móvil y escritorio y se abrieron los cuatro destinos. La caché de la PWA pasa a `v18`.

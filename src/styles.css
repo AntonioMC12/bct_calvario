@@ -215,10 +215,11 @@ a.row:hover { background: var(--paper); }
 .segments button { border: 0; border-radius: 9px; min-height: 44px; padding: .4rem 1rem; color: var(--stone); background: none;
   font-size: .88rem; font-weight: 630; flex: 1; transition: background-color .18s, color .18s, box-shadow .18s; }
 .segments [aria-pressed='true'] { color: var(--link); background: var(--surface); box-shadow: 0 1px 3px #0001; }
-.calendar-view > .segments { width: 100%; max-width: 380px; }
-.calendar-view > .segments button { display: flex; align-items: center; justify-content: center; gap: .45rem; }
-.calendar-view > .segments .icon { width: 17px; height: 17px; }
-.calendar-view > .segments [aria-pressed='true'] { color: var(--link); }
+:is(.calendar-view,.inbox-view,.catalog-panel) > .segments {
+  display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); width: 100%; max-width: none;
+}
+:is(.calendar-view,.inbox-view,.catalog-panel) > .segments button { min-width: 0; text-align: center; }
+:is(.calendar-view,.inbox-view) > .page-head .button.primary { min-height: 48px; gap: .55rem; border-radius: 12px; }
 .calendar-head, .month-controls { display: flex; align-items: center; gap: .32rem; justify-content: space-between; }
 .calendar-head { flex-wrap: wrap; }
 .month-controls { flex: 1; }
@@ -294,9 +295,8 @@ a.row:hover { background: var(--paper); }
 .notice-detail .page-head { margin: 0; }
 .notice-detail .pill { justify-self: start; }
 .notice-receipts { margin-top: 1rem; }
-.inbox-view .segments { width: 100%; max-width: 380px; }
 .catalog-tools { display: grid; gap: .8rem; max-width: 520px; }
-.catalog-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem 1rem; margin-bottom: 1rem; }
+.catalog-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .55rem 1rem; margin-bottom: 1rem; }
 .catalog-management { display: grid; flex: 1 1 20rem; max-width: 25rem;
   grid-template-columns: repeat(auto-fit,minmax(min(100%,9.5rem),1fr)); gap: .55rem; }
 .catalog-management .button { min-height: 48px; gap: .45rem; border-radius: 12px; padding-inline: .7rem; text-align: center; }
@@ -315,9 +315,8 @@ a.row:hover { background: var(--paper); }
 .catalog-part .tile { color: var(--gold); background: var(--waiting-bg); border-radius: 50%; }
 .catalog-part .eyebrow { color: inherit; font-size: .68rem; }
 .catalog-part strong { font-weight: 680; }
-.catalog-panel .segments { width: 100%; max-width: 465px; margin: 0; }
-.catalog-panel .segments [aria-pressed='true'] { background: var(--red); color: #fff; }
-.catalog-panel .segments .icon, .segments button .icon { width: 16px; height: 16px; }
+.catalog-panel .segments { margin: 0; }
+.segments button .icon { width: 16px; height: 16px; }
 .segments button:has(.icon) { display: flex; align-items: center; justify-content: center; gap: .4rem; }
 .catalog-group .section-head { margin-bottom: 0; }
 .catalog-work > .member-heading { align-items: flex-start; }
@@ -533,6 +532,11 @@ dialog .actions { justify-content: flex-end; }
 }
 
 @media (max-width: 779px) {
+  :is(.calendar-view,.inbox-view) > .page-head .button.primary { width: 100%; }
+  .catalog-actions { display: grid; }
+  .catalog-management { max-width: none; }
+  .catalog-actions > .actions { display: grid; gap: .55rem; }
+  .catalog-actions > .actions > .button { min-height: 48px; }
   #view[data-root='true']:is([data-section='calendario'],[data-section='repertorio'],[data-section='avisos'],[data-section='perfil']) .page-head:first-child {
     margin: 0; gap: 0;
   }
@@ -569,14 +573,18 @@ dialog .actions { justify-content: flex-end; }
   .rail nav a { font-size: .65rem; }
   .row { padding-inline: .7rem; }
   .segments button { padding-inline: .65rem; }
-  .catalog-filters { grid-template-columns: minmax(0,1fr); gap: .5rem; }
-  .catalog-filters > label { gap: .6rem; }
   .profile-card .avatar { min-width: 53px; width: 53px; height: 53px; }
+}
+@media (max-width: 560px) {
+  .catalog-filters { grid-template-columns: minmax(0,1fr); gap: .55rem; }
+  .catalog-filters > label { gap: .65rem; }
 }
 @media (max-width: 375px) {
   .calendar-card { padding-inline: .65rem; }
   .month-grid { margin-inline: -.65rem; }
-  .calendar-card:has(.month-grid) { margin-inline: -.75rem; }
+  .calendar-card:has(.month-grid), .calendar-view:has(.month-grid) > .segments,
+  #view .calendar-view:has(.month-grid) > .page-head:first-child { margin-inline: -.75rem; }
+  .calendar-view:has(.month-grid) > .segments { width: auto; }
   .month-controls h2 { font-size: .96rem; }
   .section-head h2 { font-size: 1.08rem; }
   .activity-top { flex-wrap: wrap; }
