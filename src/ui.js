@@ -1,4 +1,6 @@
 import { localMinute, zone } from './time.js';
+import { samePart } from './parts.js';
+export { normalize } from './parts.js';
 
 export const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -35,11 +37,9 @@ export const icon = name => '<svg class="icon" aria-hidden="true" viewBox="0 0 2
 export const intention = { yes: 'Asistiré', no: 'No asistiré', unset: 'Sin confirmar' };
 export const otherIntention = { yes: 'Asistirá', no: 'No asistirá', unset: 'Sin confirmar' };
 export const presence = { present: 'Presente', absent: 'No presente', unset: 'Sin registrar' };
-export const role = { musician: 'Músico', admin: 'Administrador', director: 'Director' };
+export const role = { musician: 'Músico', director: 'Dirección' };
 export const instrument = member => [member.instrument, member.voice].filter(Boolean).map(esc).join(' · ');
-export const matchesScore = (file, member) => file.approved && normalize(file.instrument) === normalize(member.instrument) &&
-  normalize(file.voice) === normalize(member.voice);
-export const normalize = value => String(value ?? '').normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().trim();
+export const matchesScore = (file, member) => file.approved && !file.archived && samePart(file,member);
 export const initials = name => name.trim().split(/\s+/).slice(0,2).map(word => esc(word[0]?.toUpperCase())).join('');
 
 const fmt = options => new Intl.DateTimeFormat('es-ES', { ...options, timeZone: zone });

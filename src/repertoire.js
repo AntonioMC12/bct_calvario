@@ -1,35 +1,44 @@
 import { back, bindForm, button, empty, errorRegion, esc, field, header, icon, instrument, link, matchesScore, normalize,
   options, pill, row, sectionTitle, segment } from './ui.js';
-import { downloadPdf, openSavedPdf, removePdf, savePdf } from './storage.js';
+import { downloadPdf, downloadScores, openSavedPdf, removePdf, savePdf } from './storage.js';
 import { pdfContent } from './management.js';
 import { canManage } from './roles.js';
+import { optionLists } from './part-options.js';
 
 let scope = 'mine';
 let query = '';
 let genre = '';
 const canManageScores = state => !state.offline && canManage(state.member.role);
 
-export function repertoire(content, ctx, id) {
+export function repertoire(content, ctx, id, action) {
   if (id === 'archivo') return archive(content,ctx);
   if (id === 'validacion') return validation(content,ctx);
+  if (id === 'descarga') return downloadSelection(content,ctx);
+  if (id === 'reemplazo') return replacement(content,ctx,action);
   if (id) return workPage(content,ctx,id);
   const { state } = ctx;
+  const management = canManage(state.member.role);
+  const currentScope = () => management ? scope : 'mine';
   const genres = [...new Set(state.data.works.map(work => work.genre).filter(Boolean))].sort((a,b) => a.localeCompare(b,'es'));
   if (!genres.includes(genre)) genre = '';
-  const tools = canManageScores(state) ? '<div class="actions">' + link('Cargar partituras','#/repertorio/archivo') +
-    link('Validar partituras','#/repertorio/validacion') + '</div>' : '';
-  content.innerHTML = header('Repertorio','Partituras de la banda',tools) +
+  const uploadTools = canManageScores(state) ? link('Cargar partituras','#/repertorio/archivo') +
+    link('Validar partituras','#/repertorio/validacion') : '';
+  const hasPublished = state.data.works.some(work => work.scores.some(file => file.approved && !file.archived));
+  const downloadTools = !state.offline && hasPublished ? link('Descarga por lotes','#/repertorio/descarga') +
+    (!management ? button('Descargar mis partituras','primary','type="button" id="download-mine"') : '') : '';
+  const tools = uploadTools || downloadTools ? '<div class="actions">' + uploadTools + downloadTools + '</div>' : '';
+  content.innerHTML = header('Repertorio',management ? 'Partituras de la banda' : 'Partituras para tu instrumento y voz',tools) +
     '<div class="card stack catalog-panel"><div class="field-grid">' + field('query','Buscar por título o autor','type="search" autocomplete="off"',query) +
     '<label>Género<select name="genre"><option value="">Todos los géneros</option>' +
     options(Object.fromEntries(genres.map(value => [value,value])),genre) + '</select></label></div>' +
-    segment('Partituras',[['mine','Mis partituras','repertorio'],['all','Todas','list']],scope) +
+    (management ? segment('Partituras',[['mine','Mis partituras','repertorio'],['all','Todas','list']],scope) : '') +
     '<p id="catalog-part" class="muted"></p></div><div id="works" class="stack"></div>';
   const search = content.querySelector('input');
   const genreControl = content.querySelector('[name="genre"]');
   const tabs = content.querySelector('.segments');
   const list = content.querySelector('#works');
-  const visible = () => state.data.works.filter(work => (scope === 'all' ?
-    work.scores.some(file => file.approved || canManageScores(state)) :
+  const visible = () => state.data.works.filter(work => (currentScope() === 'all' ?
+    work.scores.some(file => !file.archived && (file.approved || canManageScores(state))) :
     work.scores.some(file => matchesScore(file,state.member))) &&
     (!genre || genre === work.genre) && normalize(work.title + ' ' + work.authors + ' ' + work.genre).includes(normalize(query)));
 
@@ -37,38 +46,110 @@ export function repertoire(content, ctx, id) {
     const works = visible();
     const part = instrument(state.member);
     const scopeHint = content.querySelector('#catalog-part');
-    scopeHint.hidden = scope !== 'mine' || !part;
+    scopeHint.hidden = currentScope() !== 'mine' || !part;
     scopeHint.innerHTML = part ? 'Tu instrumento y voz · ' + part : '';
     list.innerHTML = works.length ? [...Map.groupBy(works,work => work.genre || 'Sin género')].map(([group,items]) =>
       '<section class="stack catalog-group">' + sectionTitle(group) + '<div class="catalog-grid">' + items.map(work => {
         const preferred = work.scores.find(file => matchesScore(file,state.member));
-        const file = preferred ?? (scope === 'all' ? work.scores[0] : undefined);
+        const file = preferred ?? (currentScope() === 'all' ? work.scores.find(file => !file.archived) : undefined);
         return '<article class="card stack catalog-work"><div class="member-heading"><span class="tile">' + icon('repertorio') +
           '</span><div><h3>' + esc(work.title) + '</h3><p class="muted">' + esc(work.authors) + '</p></div></div>' +
           (file ? scoreRow(file,ctx) : '') + '<a class="button quiet event-action" href="#/repertorio/' + esc(work.id) +
-          '">Ver obra y voces' + icon('right') + '</a></article>';
+          '">Ver obra' + icon('right') + '</a></article>';
       }).join('') + '</div></section>').join('') :
       empty(query || genre ? 'No hay obras que coincidan con la búsqueda.' :
-        scope === 'mine' ? 'Aún no hay partituras para tu instrumento y voz.' : 'El catálogo aún no tiene partituras disponibles.');
+        currentScope() === 'mine' ? 'Aún no hay partituras para tu instrumento y voz.' : 'El catálogo aún no tiene partituras disponibles.');
     bindScores(list,ctx,works.flatMap(work => work.scores),show);
   }
 
   search.oninput = () => { query = search.value; show(); };
   genreControl.onchange = () => { genre = genreControl.value; show(); };
-  tabs.onclick = event => {
+  if (tabs) tabs.onclick = event => {
     const selected = event.target.closest('button');
     if (!selected) return;
     scope = selected.dataset.value;
     for (const control of tabs.querySelectorAll('button')) control.setAttribute('aria-pressed',String(control === selected));
     show();
   };
+  const download = content.querySelector('#download-mine');
+  if (download) download.onclick = () => runDownload(download,ctx);
   show();
+}
+
+async function runDownload(control,ctx,ids) {
+  control.disabled = true;
+  try {
+    await downloadScores(ctx.state.member.id,ids);
+  } catch (error) {
+    ctx.networkFailure(error);
+    ctx.toast(error.message);
+  } finally {
+    control.disabled = false;
+  }
+}
+
+function downloadSelection(content,ctx) {
+  const previous = back('Repertorio','#/repertorio');
+  if (ctx.state.offline) {
+    content.innerHTML = previous + empty('Conéctate para descargar un lote de partituras.');
+    return;
+  }
+  const files = ctx.state.data.works.flatMap(work => work.scores.filter(file => file.approved && !file.archived)
+    .map(file => ({ ...file, title:work.title, authors:work.authors })));
+  content.innerHTML = previous + header('Descarga por lotes','Partituras publicadas') + (files.length ?
+    '<div class="card stack">' + field('query','Buscar por obra, instrumento o voz','type="search" autocomplete="off"') +
+    '<div class="actions">' + button('Seleccionar visibles','secondary','type="button" id="select-visible"') +
+    button('Limpiar selección','quiet','type="button" id="clear-selection"') + '</div>' +
+    '<div class="row-list" id="download-options"></div><p class="muted" role="status" id="download-count"></p>' +
+    '<div class="actions">' + button('Descargar ZIP','primary','type="button" id="download-selection"') + '</div></div>' :
+    empty('No hay partituras disponibles para descargar.'));
+  if (!files.length) return;
+  const selected = new Set();
+  const target = content.querySelector('#download-options');
+  const query = content.querySelector('[name="query"]');
+  const save = content.querySelector('#download-selection');
+  const select = content.querySelector('#select-visible');
+  const clear = content.querySelector('#clear-selection');
+  const visible = () => files.filter(file => normalize([file.title,file.authors,file.name,file.instrument,file.voice].join(' '))
+    .includes(normalize(query.value)));
+  function status() {
+    content.querySelector('#download-count').textContent = selected.size + (selected.size === 1 ? ' partitura seleccionada' : ' partituras seleccionadas');
+    save.disabled = clear.disabled = selected.size === 0;
+    select.disabled = !visible().some(file => !selected.has(file.id));
+  }
+  function draw() {
+    const results = visible();
+    target.innerHTML = results.length ? results.map(file => '<label class="row"><input type="checkbox" value="' + esc(file.id) +
+      '"' + (selected.has(file.id) ? ' checked' : '') + '><span class="row-copy"><strong>' + esc(file.title) +
+      '</strong><span>' + esc([file.instrument,file.voice,file.name].filter(Boolean).join(' · ')) + '</span></span></label>').join('') :
+      empty('No hay partituras que coincidan con la búsqueda.');
+    status();
+  }
+  target.onchange = ({target: box}) => {
+    if (box.checked) selected.add(box.value);
+    else selected.delete(box.value);
+    status();
+  };
+  query.oninput = draw;
+  select.onclick = () => { for (const file of visible()) selected.add(file.id); draw(); };
+  clear.onclick = () => { selected.clear(); draw(); };
+  save.onclick = async () => {
+    const ids = [...selected];
+    if (!ids.length) return;
+    const controls = [query,select,clear,...target.querySelectorAll('input')];
+    controls.forEach(control => { control.disabled = true; });
+    await runDownload(save,ctx,ids);
+    controls.forEach(control => { control.disabled = false; });
+    status();
+  };
+  draw();
 }
 
 function scoreRow(file, ctx) {
   const { state } = ctx;
   const saved = state.saved.has(file.id);
-  const status = !file.approved ? 'Pendiente de validación' : saved ? 'Guardada en este dispositivo' : 'Disponible en línea';
+  const status = file.archived ? 'Versión anterior' : !file.approved ? 'Pendiente de validación' :
+    saved ? 'Guardada en este dispositivo' : 'Disponible en línea';
   const size = new Intl.NumberFormat('es-ES',{ maximumFractionDigits:1 }).format(file.bytes / 1024);
   return '<div class="score-row"><span class="tile">' + icon('file') + '</span><div class="row-copy"><strong>' +
     [file.instrument,file.voice].filter(Boolean).map(esc).join(' · ') + '</strong><span class="muted">PDF · ' + size + ' KB</span><div>' +
@@ -76,9 +157,10 @@ function scoreRow(file, ctx) {
     (!state.offline ? '<a class="text-link" href="/api/files/' + file.id + '" target="_blank" rel="noopener">Abrir PDF</a>' : '') +
     (saved ? button('Abrir PDF guardado','secondary','data-open="' + file.id + '"') +
       button('Exportar copia guardada','secondary','data-download="' + file.id + '"') :
-      (!state.offline && file.approved ? button('Guardar sin conexión','secondary','data-save="' + file.id + '"') : '')) +
+      (!state.offline && file.approved && !file.archived ? button('Guardar sin conexión','secondary','data-save="' + file.id + '"') : '')) +
     (!file.approved && canManageScores(state) ?
-      button('Validar distribución','secondary','data-approve="' + file.id + '"') : '') +
+      button('Validar distribución','secondary','data-approve="' + file.id + '"') +
+      button('Descartar PDF','quiet','data-discard="' + file.id + '"') : '') +
     (state.offline && !saved ? '<span class="muted">Necesitas conexión.</span>' : '') + '</div></div>';
 }
 
@@ -108,22 +190,52 @@ function workPage(content,ctx,id) {
     return;
   }
   const mine = work.scores.filter(file => matchesScore(file,state.member));
-  const others = work.scores.filter(file => !mine.includes(file));
+  if (!canManage(state.member.role)) {
+    content.innerHTML = previous + header(work.title,[work.authors,work.genre].filter(Boolean).join(' · ')) +
+      '<div class="row-list">' + mine.map(file => scoreRow(file,ctx)).join('') + '</div>';
+    bindScores(content,ctx,mine,() => workPage(content,ctx,id));
+    return;
+  }
+  const current = work.scores.filter(file => !file.archived);
+  const archived = work.scores.filter(file => file.archived);
   content.innerHTML = previous + header(work.title,[work.authors,work.genre].filter(Boolean).join(' · ')) +
-    (mine.length ? '<section>' + sectionTitle('Tus partituras') + '<div class="row-list">' +
-      mine.map(file => scoreRow(file,ctx)).join('') + '</div></section>' : '') +
-    '<section>' + sectionTitle(mine.length ? 'Otras partituras' : 'Partituras') +
-    (others.length ? '<div class="row-list">' + others.map(file => scoreRow(file,ctx)).join('') + '</div>' :
-      empty(mine.length ? 'No hay otras voces disponibles.' : 'Aún no hay partituras para esta obra.')) + '</section>';
+    '<section>' + sectionTitle('Partituras') + (current.length ? '<div class="row-list">' + current.map(file =>
+      '<div class="card stack"><p class="muted">' + esc(file.name) + '</p>' + scoreRow(file,ctx) +
+      (canManageScores(state) && file.approved && !current.some(item => item.replaces_id === file.id) ?
+        link('Subir nueva versión','#/repertorio/reemplazo/' + file.id) : '') + '</div>').join('') + '</div>' :
+      empty('Aún no hay partituras para esta obra.')) + '</section>' + (archived.length ?
+      '<section>' + sectionTitle('Versiones anteriores') + '<div class="row-list">' + archived.map(file =>
+        '<div class="card stack"><p class="muted">' + esc(file.name) + '</p>' + scoreRow(file,ctx) + '</div>').join('') + '</div></section>' : '');
   bindScores(content,ctx,work.scores,() => workPage(content,ctx,id));
 }
 
+function replacement(content,ctx,id) {
+  const work = ctx.state.data.works.find(work => work.scores.some(file => file.id === id));
+  const previous = back('Repertorio',work ? '#/repertorio/' + work.id : '#/repertorio');
+  const file = work?.scores.find(file => file.id === id && file.approved && !file.archived);
+  if (!canManageScores(ctx.state) || !file) {
+    content.innerHTML = previous + empty('La partitura no está disponible para sustituir.');
+    return;
+  }
+  content.innerHTML = previous + header('Subir nueva versión',work.title) + '<form class="card stack"><p>' +
+    esc([file.name,file.instrument,file.voice].filter(Boolean).join(' · ')) + '</p>' +
+    '<p class="muted">La versión actual seguirá disponible hasta que valides la nueva.</p>' +
+    '<label>Nuevo PDF<input type="file" name="pdf" accept="application/pdf,.pdf" required></label>' + errorRegion +
+    '<div class="actions">' + button('Guardar para validación') + '</div></form>';
+  bindForm(content.querySelector('form'),async ({pdf}) => {
+    await ctx.api('/files/' + file.id + '/replace','POST',{ name:pdf.name,content:await pdfContent(pdf) },30000);
+    await ctx.refresh();
+    ctx.toast('Nueva versión pendiente de validación');
+    ctx.go('#/repertorio/validacion');
+  });
+}
+
 function bindScores(content, ctx, files, draw) {
-  for (const control of content.querySelectorAll('[data-save], [data-open], [data-download], [data-remove], [data-approve]')) {
+  for (const control of content.querySelectorAll('[data-save], [data-open], [data-download], [data-remove], [data-approve], [data-discard]')) {
     control.addEventListener('click', async () => {
       control.disabled = true;
-      const { save, open, download, remove, approve } = control.dataset;
-      const file = files.find(item => item.id === (save ?? open ?? download ?? remove ?? approve));
+      const { save, open, download, remove, approve, discard } = control.dataset;
+      const file = files.find(item => item.id === (save ?? open ?? download ?? remove ?? approve ?? discard));
       const account = ctx.state.member.id;
       try {
         if (save) {
@@ -142,10 +254,16 @@ function bindScores(content, ctx, files, draw) {
           ctx.toast('Descarga retirada de Calvario');
           draw();
         } else if (approve && await ctx.confirmAction('¿Validar distribución?',
-          'Confirma que la banda puede distribuir ' + file.name + ' entre los miembros activos.','Validar')) {
+          'Publicar ' + file.name + ' para su instrumento y voz.' +
+            (file.replaces_id ? ' La versión anterior pasará al historial.' : ''),'Validar')) {
           await ctx.api('/files/' + file.id + '/approve','PUT',{});
           await ctx.refresh();
-          ctx.toast('Partitura disponible para la banda');
+          ctx.toast('Partitura publicada');
+          draw();
+        } else if (discard && await ctx.confirmAction('¿Descartar el PDF pendiente?',file.name,'Descartar')) {
+          await ctx.api('/files/' + file.id,'DELETE',{});
+          await ctx.refresh();
+          ctx.toast('PDF descartado');
           draw();
         }
       } catch (error) {
@@ -177,12 +295,12 @@ function archive(content,ctx) {
   const { state } = ctx;
   const previous = back('Repertorio','#/repertorio');
   if (!canManageScores(state)) {
-    content.innerHTML = previous + empty('Administración y dirección pueden cargar partituras con conexión.');
+    content.innerHTML = previous + empty('Cargar partituras requiere acceso de Dirección y conexión.');
     return;
   }
   const works = Object.fromEntries(state.data.works.map(work => [work.id,work.title]));
   const workFields = '<div class="stack">' + field('title','Título','required maxlength="150"') +
-    field('authors','Autoría','required maxlength="250"') + field('genre','Género','maxlength="80"') + '</div>';
+    field('authors','Autoría','required maxlength="250"') + field('genre','Género','maxlength="80" list="genre-options"') + '</div>';
   content.innerHTML = previous + header('Carga de partituras','Archivo musical') + '<div class="event-layout"><form id="work" class="card stack"><h2>Obras</h2>' +
     (Object.keys(works).length ? '<label>Obra<select name="existing"><option value="">Nueva obra</option>' +
       options(works) + '</select></label>' : '') + workFields +
@@ -191,7 +309,7 @@ function archive(content,ctx) {
       '<strong>Seleccionar o arrastrar archivos PDF</strong><span class="muted">Hasta 20 archivos por lote · 5 MB por PDF</span>' +
       '<input type="file" id="batch" multiple accept="application/pdf,.pdf"></label>' +
       '<div id="file-forms" class="stack"><p class="muted">Los PDF quedan pendientes de validación.</p></div>' :
-      '<p class="muted">Crea una obra antes de cargar partituras.</p>') + '</section></div>';
+      '<p class="muted">Crea una obra antes de cargar partituras.</p>') + '</section></div>' + optionLists(state.data.catalogValues);
   const workForm = content.querySelector('#work');
   function chooseWork() {
     const chosen = state.data.works.find(work => work.id === workForm.elements.existing?.value);
@@ -230,8 +348,8 @@ function archive(content,ctx) {
     forms.innerHTML = (files.length ? '<p class="muted">' + files.length + ' PDF en el lote</p>' : '') +
       files.map((file,i) => '<form data-index="' + i + '" class="batch-form stack"><div class="member-heading"><span class="tile">' +
       icon('file') + '</span><h3>' + esc(file.name) + '</h3></div><label>Obra<select name="work" required><option value="">Elige una obra</option>' + options(works) +
-      '</select></label><div class="field-grid">' + field('instrument','Instrumento','required maxlength="80"') +
-      field('voice','Voz','maxlength="80"') + '</div>' + errorRegion +
+      '</select></label><div class="field-grid">' + field('instrument','Instrumento','required maxlength="80" list="instrument-options"') +
+      field('voice','Voz','maxlength="80" list="voice-options"') + '</div>' + errorRegion +
       button('Guardar para validación','secondary') + '</form>').join('') +
       (files.length > 1 ? button('Guardar lote','primary','id="save-batch"') : '');
     async function upload(input,form) {

@@ -1,2 +1,2 @@
-export const managementRoles = Object.freeze(['admin', 'director']);
-export const canManage = role => managementRoles.includes(role);
+export const managementRoles = Object.freeze(['director']);
+export const canManage = role => role === 'director';

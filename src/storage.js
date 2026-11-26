@@ -1,4 +1,6 @@
 import { backend } from './connection.js';
+import { canManage } from './roles.js';
+import { samePart } from './parts.js';
 
 const prefix = 'calvario:v1:';
 const accountKey = prefix + 'account';
@@ -18,12 +20,21 @@ function read(key) {
 export function getLocal() {
   const account = read(accountKey);
   if (!account) return { account: null, dashboard: null, pending: {} };
-  const dashboard = read(prefix + account + ':dashboard');
+  let dashboard = read(prefix + account + ':dashboard');
+  if (dashboard && Date.now() - Date.parse(dashboard.updatedAt) < 86400000) {
+    const member = dashboard.member.role === 'admin' ? { ...dashboard.member, role:'director' } : dashboard.member;
+    dashboard = { ...dashboard, member, works:offlineWorks(dashboard.works,member) };
+  } else dashboard = null;
   return {
     account,
-    dashboard: dashboard && Date.now() - Date.parse(dashboard.updatedAt) < 86400000 ? dashboard : null,
+    dashboard,
     pending: read(prefix + account + ':queue') ?? {},
   };
+}
+
+function offlineWorks(works, member) {
+  return works.map(work => ({ ...work, scores:work.scores.filter(file =>
+    file.approved && !file.archived && (canManage(member.role) || samePart(file,member))) })).filter(work => work.scores.length);
 }
 
 function write(key, value) {
@@ -46,7 +57,7 @@ export function cacheDashboard(data) {
       return starts > timestamp - 30 * day && starts < timestamp + 90 * day;
     }).map(event => ({ ...event, reason: '' })),
     notices: data.notices.filter(notice => Date.parse(notice.created_at) > timestamp - 30 * day).slice(0,50),
-    works: data.works.map(work => ({ ...work, scores: work.scores.filter(file => file.approved) })).filter(work => work.scores.length),
+    works: offlineWorks(data.works,member),
   };
   write(prefix + member.id + ':dashboard', dashboard);
   write(accountKey, member.id);
@@ -60,10 +71,17 @@ export function savePending(account, pending) {
 const pdfCache = id => 'calvario-pdf-v1-' + id;
 const fileUrl = file => '/api/files/' + file.id;
 
-export async function savedFiles(account) {
+export async function savedFiles(account, works = []) {
   if (!globalThis.caches || !account) return new Set();
   const cache = await caches.open(pdfCache(account));
-  return new Set((await cache.keys()).map(request => new URL(request.url).pathname.split('/').at(-1)));
+  const allowed = new Set(works.flatMap(work => work.scores.filter(file => file.approved && !file.archived).map(file => file.id)));
+  const saved = new Set();
+  for (const request of await cache.keys()) {
+    const id = new URL(request.url).pathname.split('/').at(-1);
+    if (allowed.has(id)) saved.add(id);
+    else await cache.delete(request);
+  }
+  return saved;
 }
 
 export async function savePdf(account, file) {
@@ -89,7 +107,11 @@ export async function removePdf(account, file) {
 }
 
 async function localPdfUrl(account, file) {
-  if (getLocal().account !== account) throw new Error('La cuenta ha cambiado.');
+  const local = getLocal();
+  if (local.account !== account) throw new Error('La cuenta ha cambiado.');
+  if (!local.dashboard?.works.some(work => work.scores.some(item => item.id === file.id))) {
+    throw new Error('La partitura guardada ya no está disponible. Conéctate para actualizar el repertorio.');
+  }
   const response = await (await caches.open(pdfCache(account))).match(fileUrl(file));
   if (!response) throw new Error('La partitura no está guardada.');
   const url = URL.createObjectURL(await response.blob());
@@ -118,9 +140,30 @@ export async function openSavedPdf(account, file) {
 
 export async function downloadPdf(account, file) {
   const url = await localPdfUrl(account,file);
+  exportFile(url,file.name);
+}
+
+export async function downloadScores(account, ids) {
+  const response = await backend('/scores/export',{
+    method:'POST', headers:{ 'X-Calvario-Account':account, 'Content-Type':'application/json' },
+    body:JSON.stringify(ids ? { ids } : {}), cache:'no-store',
+  });
+  if (!response.ok || response.headers.get('content-type') !== 'application/zip') {
+    const payload = await response.json().catch(() => ({}));
+    const error = new Error(payload.error || 'No se ha podido descargar el lote de partituras.');
+    error.status = response.status;
+    error.code = payload.code;
+    throw error;
+  }
+  const blob = await response.blob();
+  if (getLocal().account !== account) throw new Error('La cuenta ha cambiado.');
+  exportFile(URL.createObjectURL(blob),'calvario-partituras.zip');
+}
+
+function exportFile(url,name) {
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = file.name;
+  anchor.download = name;
   anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
