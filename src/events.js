@@ -1,4 +1,4 @@
-import { actionLink, area, attendanceBadge, back, bindForm, button, dateOnly, dayKey, displayTime, empty, errorRegion, esc, eventCard, field, fullDate,
+import { area, attendanceBadge, back, bindForm, button, dateOnly, dayKey, displayHour, displayTime, empty, errorRegion, esc, eventCard, field, fullDate,
   header, icon, instrument, intention, normalize, options, otherIntention, pill, presence, row, sectionTitle, segment, timeRange } from './ui.js';
 import { canManage } from './roles.js';
 
@@ -128,13 +128,16 @@ export async function eventPage(content, ctx, id, action) {
   const places = [event.location,event.town].filter(Boolean).join(' · ');
   const map = encodeURIComponent([event.location,event.town].filter(Boolean).join(', '));
   const responses = (counts.yes ?? 0) + ' asistirán · ' + (counts.no ?? 0) + ' no asistirán · ' + (counts.unset ?? 0) + ' sin confirmar';
+  const canEdit = manager(state) && !event.cancelled;
+  const rollAction = !event.roll_call ? '' : open ?
+    '<div class="event-roll-status">' + icon('clock') + '<div><strong>Pasar lista</strong>' +
+    '<p>Se abre a las <time datetime="' + esc(event.starts) + '">' + displayHour(event.starts) + '</time></p></div></div>' :
+    '<a class="button primary" href="' + href + '/pasar-lista">' + icon('clipboard') + 'Pasar lista</a>';
   content.innerHTML = '<div class="event-view">' + prev + '<div class="event-layout">' +
-    '<section class="card stack event-overview">' + header(event.title, '',
-      manager(state) && !event.cancelled ? actionLink('Editar',href + '/editar') : '', event.type) +
+    '<section class="card stack event-overview">' + header(event.title, '', '', event.type) +
+    (canEdit ? '<div class="event-management" role="group" aria-label="Gestión del evento">' + rollAction +
+      '<a class="button secondary" href="' + href + '/editar">' + icon('pencil') + 'Editar</a></div>' : '') +
     (event.cancelled ? '<div class="callout"><strong>Evento cancelado</strong><p>La convocatoria se conserva en el historial.</p></div>' : '') +
-    (manager(state) && event.roll_call && !event.cancelled ? '<div class="event-roll-action">' +
-      '<a class="button primary event-action" href="' + href + '/pasar-lista">' + icon('clipboard') + 'Pasar lista</a>' +
-      (open ? '<p class="muted">La lista se abre al comenzar la convocatoria.</p>' : '') + '</div>' : '') +
     (event.description ? '<p class="pre">' + esc(event.description) + '</p>' : '') +
     '<div class="event-facts"><div class="info-line"><span class="tile">' + icon('clock') + '</span><div><strong>' + fullDate(event.starts) +
     '</strong><p class="muted">' + timeRange(event) + ' · Hora de Madrid · Fin aproximado</p></div></div>' +

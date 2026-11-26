@@ -16,6 +16,7 @@ const paths = {
   gestion: '<rect x="3" y="7" width="18" height="13" rx="3"/><path d="M8 7V4h8v3M3 13h18m-11 0v2h4v-2"/>',
   right: '<path d="m9 6 6 6-6 6"/>',
   left: '<path d="m15 6-6 6 6 6"/>',
+  pencil: '<path d="m4 16 12-12a2.8 2.8 0 0 1 4 4L8 20l-5 1zM14 6l4 4"/>',
   arrow: '<path d="M4 12h15m-6-6 6 6-6 6"/>',
   list: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
   chart: '<path d="M4 4v16h16M9 16v-4m5 4V8m5 8V5"/>',
@@ -65,11 +66,12 @@ const capitalize = s => s.charAt(0).toUpperCase() + s.slice(1);
 
 export const fullDate = date => capitalize(full.format(new Date(date)));
 export const displayTime = date => dateAndTime.format(new Date(date));
+export const displayHour = date => time.format(new Date(date));
 export const dayKey = date => localMinute(date).slice(0,10);
 export const dateOnly = date => fullDate(date + 'T12:00:00Z');
 export const timeRange = event => {
-  const start = time.format(new Date(event.starts));
-  const end = time.format(new Date(event.ends));
+  const start = displayHour(event.starts);
+  const end = displayHour(event.ends);
   return start + ' – ' + (dayKey(event.starts) === dayKey(event.ends) ? end : fullDate(event.ends) + ' · ' + end);
 };
 
