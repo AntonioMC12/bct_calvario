@@ -254,7 +254,9 @@ async function signIn(requesting, input) {
 }
 
 function home(data) {
-  const next = data.events.find(event => !event.cancelled && Date.parse(event.starts) > Date.now());
+  const upcoming = data.events.filter(event => !event.cancelled && Date.parse(event.starts) > Date.now());
+  const [next] = upcoming;
+  const rehearsal = upcoming.find(event => event.type === 'Ensayo');
   const unread = data.notices.filter(item => !item.read_at);
   const memberPart = instrument(data.member);
   const personal = data.works.flatMap(work => work.scores.filter(file => matchesScore(file, data.member))
@@ -262,7 +264,9 @@ function home(data) {
   return '<div class="home-view"><div class="home-intro"><p class="brand home-wordmark">Calvario</p>' +
     header('Tu banda, al día', '', '', fullDate(new Date())) + '</div>' +
     '<div class="home-grid"><section>' + sectionTitle('Próximo evento', link('Ver calendario','#/calendario'), 'calendario') +
-    (next ? eventCard(next, state.pending[next.id], { featured:true }) : empty('No hay próximas convocatorias.')) +
+    (next ? eventCard(next, state.pending[next.id], { featured:true, quick:next === rehearsal }) : empty('No hay próximas convocatorias.')) +
+    (rehearsal && rehearsal !== next ? '<div class="home-rehearsal">' + sectionTitle('Próximo ensayo') +
+      eventCard(rehearsal,state.pending[rehearsal.id],{ featured:true, quick:true }) + '</div>' : '') +
     '</section><div class="home-sections">' +
     (unread.length ? '<section class="home-notices">' + sectionTitle('Avisos', link('Ver todos','#/avisos'), 'announce',
       pill(unread.length + (unread.length === 1 ? ' nuevo' : ' nuevos'), 'accent')) +
@@ -277,6 +281,28 @@ function home(data) {
       row(work.title, [work.authors,state.saved.has(file.id) ? 'Guardada sin conexión' : 'PDF'].filter(Boolean).join(' · '),
         '#/repertorio/' + work.id, 'file')).join('') +
     '</div>' : empty('Aún no hay partituras para tu instrumento y voz.')) + '</section></div></div></div>';
+}
+
+function bindHome(content) {
+  content.innerHTML = home(state.data);
+  const form = content.querySelector('.quick-attendance');
+  if (!form) return;
+  const id = form.dataset.rehearsal;
+  bindForm(form, async (_, current, trigger) => {
+    const value = trigger?.value;
+    if (value !== 'yes' && value !== 'no') return;
+    const event = state.data?.events.find(item => item.id === id);
+    if (!event || event.cancelled || Date.parse(event.starts) <= Date.now()) {
+      throw new Error('Las respuestas están cerradas para este ensayo.');
+    }
+    const pending = state.pending[id];
+    const reason = value === 'no' ? (pending?.value === 'no' ? pending.reason : event.reason) ?? '' : '';
+    await respond(event,value,reason);
+    if (current.isConnected) {
+      await render();
+      shell.querySelector('.quick-attendance button[aria-pressed="true"]')?.focus({ preventScroll:true });
+    }
+  });
 }
 
 let noticeFilter = 'all';
@@ -451,7 +477,7 @@ async function render() {
   updateNoticeCount();
   const content = shell.querySelector('#view');
   try {
-    if (route === 'inicio') content.innerHTML = home(state.data);
+    if (route === 'inicio') bindHome(content);
     else if (route === 'calendario' && !id) calendar(content, context);
     else if (route === 'calendario' && (id === 'nuevo' || action === 'editar')) await eventEditor(content, context, id);
     else if (route === 'calendario' && action === 'formacion') await formationEditor(content, context, id);

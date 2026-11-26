@@ -118,22 +118,28 @@ export async function eventPage(content, ctx, id, action) {
   const roster = detail?.roster ?? [];
   const counts = Object.fromEntries([...Map.groupBy(roster, member => member.intention)].map(([value, items]) => [value, items.length]));
   const places = [event.location,event.town].filter(Boolean).join(' · ');
-  const map = [event.meeting || event.location,event.town].filter(Boolean).join(', ');
+  const map = encodeURIComponent([event.location,event.town].filter(Boolean).join(', '));
   const responses = (counts.yes ?? 0) + ' asistirán · ' + (counts.no ?? 0) + ' no asistirán · ' + (counts.unset ?? 0) + ' sin confirmar';
   content.innerHTML = '<div class="event-view">' + prev + '<div class="event-layout">' +
     '<section class="card stack event-overview">' + header(event.title, '',
       manager(state) && !event.cancelled ? link('Editar',href + '/editar') : '', event.type) +
     (event.cancelled ? '<div class="callout"><strong>Evento cancelado</strong><p>La convocatoria se conserva en el historial.</p></div>' : '') +
-    '<div class="info-line"><span class="tile">' + icon('calendario') + '</span><div><strong>' + fullDate(event.starts) +
+    (event.description ? '<p class="pre">' + esc(event.description) + '</p>' : '') +
+    '<div class="event-facts"><div class="info-line"><span class="tile">' + icon('clock') + '</span><div><strong>' + fullDate(event.starts) +
     '</strong><p class="muted">' + timeRange(event) + ' · Hora de Madrid · Fin aproximado</p></div></div>' +
-    (event.meeting ? '<div class="info-line"><span class="tile">' + icon('clock') + '</span><div><strong>Punto de encuentro</strong>' +
-      '<p class="muted">' + esc(event.meeting) + '</p></div></div>' : '') +
-    (event.description ? '<p class="event-description pre">' + esc(event.description) + '</p>' : '') +
     (places ? '<div class="info-line"><span class="tile">' + icon('map') + '</span><div><strong>' +
       esc(event.location || event.town) + '</strong>' +
       (event.location && event.town ? '<p class="muted">' + esc(event.town) + '</p>' : '') + '</div></div>' : '') +
-    (map ? '<a class="button quiet event-action" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/search/?api=1&amp;query=' +
-      encodeURIComponent(map) + '">' + icon('compass') + 'Abrir en mapas</a>' : '') +
+    (event.meeting ? '<div class="info-line"><span class="tile">' + icon('compass') + '</span><div><strong>Punto de encuentro</strong>' +
+      '<p class="muted pre">' + esc(event.meeting) + '</p></div></div>' : '') + '</div>' +
+    (map && !state.offline ? '<iframe class="event-map" title="Mapa de ' + esc(places) + '" loading="lazy" referrerpolicy="no-referrer" ' +
+      'src="https://www.google.com/maps?q=' + map + '&amp;output=embed&amp;hl=es"></iframe>' : '') +
+    (map && state.offline ? '<p class="muted">El mapa necesita conexión.</p>' : '') +
+    (map || detail ? '<div class="event-location-actions">' +
+      (map ? '<a class="button primary" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/search/?api=1&amp;query=' +
+        map + '">' + icon('compass') + 'Abrir en mapas</a>' : '') +
+      (detail ? '<a class="button quiet" href="/api/events/' + id + '/calendar">' + icon('calendario') + 'Exportar .ics</a>' : '') + '</div>' : '') +
+    (detail ? '<p class="event-description muted">La exportación crea una copia. Consulta aquí los cambios posteriores.</p>' : '') +
     '</section><div class="stack event-side"><section class="card stack event-attendance"><div class="event-labels"><h2>' +
     icon('clipboard') + 'Mi asistencia</h2>' +
     attendanceBadge(event.intention) + '</div>' +
@@ -151,11 +157,10 @@ export async function eventPage(content, ctx, id, action) {
     (manager(state) && !event.cancelled && !open ? row('Pasar lista','Registrar presencia real',href + '/pasar-lista','check') : '') +
     (manager(state) ? row('Corregir intención','Revisar respuestas y motivos',href + '/corregir','perfil') +
       row('Formación','Editar posiciones y plantillas',href + '/formacion','grid') : '') +
-    '</div>' : '') + '</div>' + (detail ? '<section class="card stack event-documents"><h2>' + icon('folder') + 'Documentación y calendario</h2>' +
+    '</div>' : '') + '</div>' + (detail ? '<section class="card stack event-documents"><h2>' + icon('folder') + 'Documentación</h2>' +
     (detail.attachments.length ? '<div class="row-list">' + detail.attachments.map(file => row(file.name,'PDF','/api/files/' + file.id,'file')).join('') + '</div>' :
       '<p class="muted">Sin documentos adjuntos.</p>') +
-    '<a class="button quiet event-action" href="/api/events/' + id + '/calendar">' + icon('calendario') + 'Exportar al calendario (.ics)</a>' +
-    '<p class="muted">La exportación crea una copia. Consulta aquí los cambios posteriores.</p></section>' : '') + '</div></div>';
+    '</section>' : '') + '</div></div>';
   content.querySelector('#discard')?.addEventListener('click', () => {
     ctx.setPending(id,null);
     ctx.render();
