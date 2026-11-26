@@ -1,4 +1,4 @@
-import { back, bindForm, button, empty, errorRegion, esc, field, header, icon, instrument, link, matchesScore, normalize,
+import { actionLink, back, bindForm, button, empty, errorRegion, esc, field, header, icon, instrument, matchesScore, normalize,
   options, pill, row, sectionTitle, segment } from './ui.js';
 import { downloadPdf, downloadScores, openSavedPdf, removePdf, savePdf } from './storage.js';
 import { pdfContent } from './management.js';
@@ -25,7 +25,7 @@ export function repertoire(content, ctx, id, action) {
     '<a class="button primary" href="#/repertorio/archivo">' + icon('upload') + '<span>Cargar partituras</span></a>' +
     '<a class="button secondary" href="#/repertorio/validacion">' + icon('check-ring') + '<span>Validar partituras</span></a></div>' : '';
   const hasPublished = state.data.works.some(work => work.scores.some(file => file.approved && !file.archived));
-  const downloadTools = !state.offline && hasPublished ? link('Descarga por lotes','#/repertorio/descarga') +
+  const downloadTools = !state.offline && hasPublished ? actionLink('Descarga por lotes','#/repertorio/descarga','download') +
     (!management ? '<button class="button primary" type="button" id="download-mine">' + icon('download') +
     'Descargar mis partituras</button>' : '') : '';
   const tools = uploadTools || downloadTools ? '<div class="catalog-actions">' + uploadTools +
@@ -210,7 +210,7 @@ function workPage(content,ctx,id) {
     '<section>' + sectionTitle('Partituras') + (current.length ? '<div class="row-list">' + current.map(file =>
       '<div class="card stack"><p class="muted">' + esc(file.name) + '</p>' + scoreRow(file,ctx) +
       (canManageScores(state) && file.approved && !current.some(item => item.replaces_id === file.id) ?
-        link('Subir nueva versión','#/repertorio/reemplazo/' + file.id) : '') + '</div>').join('') + '</div>' :
+        actionLink('Subir nueva versión','#/repertorio/reemplazo/' + file.id,'upload') : '') + '</div>').join('') + '</div>' :
       empty('Aún no hay partituras para esta obra.')) + '</section>' + (archived.length ?
       '<section>' + sectionTitle('Versiones anteriores') + '<div class="row-list">' + archived.map(file =>
         '<div class="card stack"><p class="muted">' + esc(file.name) + '</p>' + scoreRow(file,ctx) + '</div>').join('') + '</div></section>' : '');

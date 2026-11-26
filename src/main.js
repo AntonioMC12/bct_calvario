@@ -1,5 +1,5 @@
-import { back, bindForm, button, displayTime, empty, errorRegion, esc, eventCard, field, fullDate, header, icon,
-  initials, instrument, intention, link, matchesScore, options, pill, presence, role, row, sectionTitle, segment } from './ui.js';
+import { actionLink, back, bindForm, button, displayTime, empty, errorRegion, esc, eventCard, field, fullDate, header, icon,
+  initials, instrument, intention, matchesScore, options, pill, presence, role, row, sectionTitle, segment } from './ui.js';
 import { cacheDashboard, clearLocalSignout, clearPrivate, getLocal, localSignoutPending, markLocalSignout, savePending, savedFiles } from './storage.js';
 import { calendar, eventPage } from './events.js';
 import { repertoire, downloads } from './repertoire.js';
@@ -263,19 +263,19 @@ function home(data) {
     .map(file => ({ work, file }))).slice(0,3);
   return '<div class="home-view"><div class="home-intro"><p class="brand home-wordmark">Calvario</p>' +
     header('Tu banda, al día', '', '', fullDate(new Date())) + '</div>' +
-    '<div class="home-grid"><section>' + sectionTitle('Próximo evento', link('Ver calendario','#/calendario'), 'calendario') +
+    '<div class="home-grid"><section>' + sectionTitle('Próximo evento', actionLink('Ver calendario','#/calendario'), 'calendario') +
     (next ? eventCard(next, state.pending[next.id], { featured:true, quick:next === rehearsal }) : empty('No hay próximas convocatorias.')) +
     (rehearsal && rehearsal !== next ? '<div class="home-rehearsal">' + sectionTitle('Próximo ensayo') +
       eventCard(rehearsal,state.pending[rehearsal.id],{ featured:true, quick:true }) + '</div>' : '') +
     '</section><div class="home-sections">' +
-    (unread.length ? '<section class="home-notices">' + sectionTitle('Avisos', link('Ver todos','#/avisos'), 'announce',
+    (unread.length ? '<section class="home-notices">' + sectionTitle('Avisos', actionLink('Ver todos','#/avisos'), 'announce',
       pill(unread.length + (unread.length === 1 ? ' nuevo' : ' nuevos'), 'accent')) +
       '<div class="row-list">' + unread.slice(0,2).map(notice =>
         '<a class="row home-notice" href="#/avisos/' + esc(notice.id) + '"><span class="tile">' + icon('bell') + '</span>' +
         '<span class="row-copy"><span class="home-notice-date muted">' + displayTime(notice.created_at) + '</span><strong>' +
         esc(notice.title) + '</strong><span class="muted excerpt">' + esc(notice.message) + '</span></span>' + icon('right') + '</a>').join('') +
       '</div></section>' : '') +
-    '<section>' + sectionTitle('Para tu instrumento', link('Repertorio','#/repertorio'), 'repertorio') +
+    '<section>' + sectionTitle('Para tu instrumento', actionLink('Repertorio','#/repertorio'), 'repertorio') +
     (memberPart ? '<p class="home-section-note muted">Tu parte · ' + memberPart + '</p>' : '') +
     (personal.length ? '<div class="home-scores">' + personal.map(({ work, file }) =>
       row(work.title, [work.authors,state.saved.has(file.id) ? 'Guardada sin conexión' : 'PDF'].filter(Boolean).join(' · '),
@@ -491,11 +491,11 @@ async function render() {
     else if (route === 'gestion' && id === 'material') await materialPage(content,context,action);
     else if (route === 'gestion' && id === 'catalogo') catalogPage(content,context);
     else if (route === 'gestion') await management(content, context, id, action);
-    else content.innerHTML = header('Página no encontrada') + link('Volver al inicio','#/inicio');
+    else content.innerHTML = header('Página no encontrada') + actionLink('Volver al inicio','#/inicio','left');
   } catch (error) {
     if (token !== rendering) return;
     networkFailure(error);
-    content.innerHTML = empty(error.message) + link('Volver al inicio','#/inicio');
+    content.innerHTML = empty(error.message) + actionLink('Volver al inicio','#/inicio','left');
   }
   if (token === rendering) {
     const page = [route,id,action].join('/');

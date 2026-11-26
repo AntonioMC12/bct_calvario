@@ -1,4 +1,4 @@
-import { back, bindForm, button, displayTime, empty, errorRegion, esc, field, header, icon, link, normalize,
+import { actionLink, back, bindForm, button, displayTime, empty, errorRegion, esc, field, header, icon, normalize,
   options, pill, sectionTitle, area } from './ui.js';
 import { canManage } from './roles.js';
 
@@ -52,7 +52,7 @@ export async function materialPage(content, ctx, id) {
       return '<article class="card member-card"><div class="member-heading"><span class="tile">' + icon('grid') +
         '</span><div><h2>' + esc(item.name) + '</h2><p class="muted">' + esc(item.code + ' · ' + item.category) + '</p>' +
         availability(item,loan) + (loan ? '<p>' + esc(loan.member_name) + '</p>' : '') + '</div></div>' +
-        link('Ver ficha',root + '/' + item.id) + '</article>';
+        actionLink('Ver ficha',root + '/' + item.id) + '</article>';
     }).join('') : empty('No hay material con esos filtros.');
   }
   query.oninput = status.onchange = draw;

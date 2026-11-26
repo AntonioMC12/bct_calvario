@@ -74,7 +74,8 @@ svg { display: block; }
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: .65rem; margin-bottom: .75rem; }
 .section-head h2 { display: flex; align-items: center; gap: .45rem; }
 .section-head h2 > span:not(.pill) { min-width: 0; }
-.section-head .text-link { flex-shrink: 0; font-size: .83rem; }
+.section-head:has(> .section-action) { flex-wrap: wrap; }
+.section-head:has(> .section-action) h2 { flex: 1 1 8rem; }
 .section-head .icon { color: var(--link); width: 19px; height: 19px; }
 .card { padding: clamp(1rem, 2.7vw, 1.45rem); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: var(--shadow); min-width: 0; overflow-wrap: anywhere; }
@@ -92,6 +93,12 @@ svg { display: block; }
 .button.primary:hover { background: var(--red-pressed); }
 .button.secondary { color: var(--ink); background: var(--surface); border-color: var(--control); justify-content: center; }
 .button.secondary:hover { background: var(--paper); }
+.button.section-action { color: var(--link); background: var(--soft-red); border-color: var(--control);
+  gap: .4rem; padding-inline: .65rem; font-size: .83rem; font-weight: 700; text-align: center; }
+.button.section-action:hover { background: var(--surface); border-color: var(--link); }
+.section-action .icon { width: 16px; height: 16px; }
+.stack > .section-action { justify-self: start; }
+.empty + .section-action { margin-top: .75rem; }
 .button.quiet { color: var(--ink); background: var(--ivory); }
 .button.quiet:hover { border-color: var(--control); }
 .text-link, .back { color: var(--link); background: transparent; padding-inline: .15rem; }
