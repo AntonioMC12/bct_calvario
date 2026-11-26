@@ -2,6 +2,13 @@
 
 El [estado y los pendientes de Calvario](estado-y-pendientes.md) recoge la cobertura actual y los requisitos añadidos el 26 de noviembre de 2026. Las entradas siguientes conservan el historial de cada entrega.
 
+## 2026-11-26 · Publicación del piloto con Dirección e inventario
+
+- GitHub Pages publica `f35c9cf` desde `gh-pages` y sirve los archivos de la PWA con caché `v12`. El código de la entrega es `ab7f2df`.
+- Supabase se actualizó del esquema 1 al 3 antes de desplegar `calvario-api`. Se guardó una copia lógica cifrada fuera de Git y se comprobó su restauración en PostgreSQL aislado, incluidas las huellas de los PDF.
+- La API publicada devuelve `ready`, responde desde el origen de Pages y exige sesión para el inventario. Se conservaron los recuentos de miembros y archivos, y el esquema sigue privado. El asesor de seguridad de Supabase no detectó incidencias.
+- Quedan por validar los proveedores reales de Google, correo y Web Push y completar la aceptación del piloto en dispositivos físicos.
+
 ## 2026-11-26 · Dirección, inventario y repertorio autorizado
 
 - DP02 y RF01–RF08. Administración se integra en Dirección. La migración conserva los identificadores y las sesiones de las cuentas. Dirección vincula una solicitud de correo verificado o Google a una ficha sin cuenta al aprobarla. Se mantienen el perfil musical, la presencia, las asignaciones de material y la identidad de acceso.
