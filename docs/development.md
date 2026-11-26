@@ -2,6 +2,10 @@
 
 El [estado y los pendientes de Calvario](estado-y-pendientes.md) recoge la cobertura actual y los requisitos añadidos el 26 de noviembre de 2026. Las entradas siguientes conservan el historial de cada entrega.
 
+## 2026-11-26 · Legibilidad de Asistentes y Repertorio
+
+- Asistentes muestra los filtros en dos columnas en móvil, con el recuento separado de la etiqueta. En Repertorio, las fichas de partitura reservan una fila completa para el instrumento, la voz y el estado y sitúan los botones debajo. Se comprobaron los filtros y el buscador de asistentes, y el ancho de las fichas a 320, 512 y 1280 px. Pasaron `npm run check` y las 29 pruebas. La caché pasa a `v20`.
+
 ## 2026-11-26 · Selectores y acciones superiores
 
 - «Mes / Lista» ocupa todo el ancho del calendario. Se comprobó la alineación en las dos vistas a 320, 390, 512 y 1280 px. Pasaron `npm run check` y las 29 pruebas. La caché de la PWA pasa a `v19`.
