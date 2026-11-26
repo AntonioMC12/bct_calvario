@@ -2,6 +2,20 @@
 
 El [estado y los pendientes de Calvario](estado-y-pendientes.md) recoge la cobertura actual y los requisitos añadidos el 26 de noviembre de 2026. Las entradas siguientes conservan el historial de cada entrega.
 
+## 2026-11-26 · Renovación visual de Calvario
+
+- RF09–RF15, RF17–RF24 y RF29–RF41. Se revisaron las 16 pantallas de [Calvario PWA Gestión Banda en Stitch](https://stitch.withgoogle.com/projects/5747176225622362011). Inicio, Calendario, Repertorio, Avisos, Perfil y las herramientas de Dirección comparten tipografía Inter, identidad en Cinzel, fondo marfil y acentos rojos y dorados. Las composiciones se adaptan al ancho de pantalla y muestran los estados, datos y permisos de la aplicación.
+- El acceso usa un panel fotográfico con el escudo de la banda y un formulario con etiquetas visibles. La portada es una ilustración fotográfica generada con ImageGen e integrada como JPEG local en `public/login-hero.jpg`. La misma composición acompaña la solicitud, la recuperación y los estados de la cuenta.
+- La navegación utiliza barra inferior en móvil y barra lateral en escritorio. Las animaciones de entrada y de interacción respetan `prefers-reduced-motion`. La foto se incluye en el paquete del piloto y en la caché `v13` de la PWA. El cambio no requiere migraciones.
+- Pasaron `npm run check` y las 29 pruebas de `npm test`. Se revisó en navegador la demo aislada en móvil y escritorio, en tema claro y oscuro, con sesiones de músico y Dirección.
+
+<details>
+<summary>Instrucción de ImageGen para la portada</summary>
+
+> Use case: photorealistic-natural. Asset type: editorial photograph for the sign-in page of Calvario, a Spanish cornet and drum band. Primary request: a richly textured close-up of a polished brass Spanish marching cornet resting diagonally over folded black wool band uniform fabric with a restrained dark-crimson seam. Single instrument, authentic compact tubing and warm brass reflections. Style: premium editorial still-life photography, calm and contemporary, realistic materials. Composition: vertical 2:3, cornet centered slightly to the right, bell pointing towards the upper right, instrument visible in the middle half for a horizontal mobile crop, charcoal negative space in the lower third for overlaid web lettering. Lighting: soft directional late-afternoon stage light, deep garnet and near-black shadows, muted champagne-gold highlights. No people, logos, insignia, text, graphics, or watermarks.
+
+</details>
+
 ## 2026-11-26 · Publicación del piloto con Dirección e inventario
 
 - GitHub Pages publica `f35c9cf` desde `gh-pages` y sirve los archivos de la PWA con caché `v12`. El código de la entrega es `ab7f2df`.

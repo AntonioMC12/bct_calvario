@@ -10,10 +10,10 @@ import { configurePush, createPushWorker } from '../server/push.mjs';
 
 const types = {
   html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8',
-  css: 'text/css; charset=utf-8', png: 'image/png', woff2: 'font/woff2', svg: 'image/svg+xml',
+  css: 'text/css; charset=utf-8', png: 'image/png', jpg: 'image/jpeg', woff2: 'font/woff2', svg: 'image/svg+xml',
   webmanifest: 'application/manifest+json',
 };
-const assetRoute = /^\/(?:src\/[\w-]+\.(?:js|css)|public\/[\w-]+\.(?:png|woff2|svg)|sw\.js|manifest\.webmanifest)$/;
+const assetRoute = /^\/(?:src\/[\w-]+\.(?:js|css)|public\/[\w-]+\.(?:png|jpg|woff2|svg)|sw\.js|manifest\.webmanifest)$/;
 
 function configuredOrigin(value) {
   if (!value) return null;

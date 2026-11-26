@@ -25,14 +25,17 @@ export function repertoire(content, ctx, id, action) {
     link('Validar partituras','#/repertorio/validacion') : '';
   const hasPublished = state.data.works.some(work => work.scores.some(file => file.approved && !file.archived));
   const downloadTools = !state.offline && hasPublished ? link('Descarga por lotes','#/repertorio/descarga') +
-    (!management ? button('Descargar mis partituras','primary','type="button" id="download-mine"') : '') : '';
+    (!management ? '<button class="button primary" type="button" id="download-mine">' + icon('download') +
+    'Descargar mis partituras</button>' : '') : '';
   const tools = uploadTools || downloadTools ? '<div class="actions">' + uploadTools + downloadTools + '</div>' : '';
   content.innerHTML = header('Repertorio',management ? 'Partituras de la banda' : 'Partituras para tu instrumento y voz',tools) +
-    '<div class="card stack catalog-panel"><div class="field-grid">' + field('query','Buscar por título o autor','type="search" autocomplete="off"',query) +
+    '<div class="stack catalog-panel"><div class="card catalog-filters"><div class="search-field">' + icon('search') +
+    '<label><span class="sr-only">Buscar por título, autoría o género</span><input type="search" name="query" autocomplete="off" ' +
+    'placeholder="Buscar por título, autoría o género" value="' + esc(query) + '"></label></div>' +
     '<label>Género<select name="genre"><option value="">Todos los géneros</option>' +
     options(Object.fromEntries(genres.map(value => [value,value])),genre) + '</select></label></div>' +
     (management ? segment('Partituras',[['mine','Mis partituras','repertorio'],['all','Todas','list']],scope) : '') +
-    '<p id="catalog-part" class="muted"></p></div><div id="works" class="stack"></div>';
+    '<div id="catalog-part" class="catalog-part"></div></div><div id="works" class="stack"></div>';
   const search = content.querySelector('input');
   const genreControl = content.querySelector('[name="genre"]');
   const tabs = content.querySelector('.segments');
@@ -47,13 +50,15 @@ export function repertoire(content, ctx, id, action) {
     const part = instrument(state.member);
     const scopeHint = content.querySelector('#catalog-part');
     scopeHint.hidden = currentScope() !== 'mine' || !part;
-    scopeHint.innerHTML = part ? 'Tu instrumento y voz · ' + part : '';
+    scopeHint.innerHTML = part ? '<span class="tile">' + icon('repertorio') +
+      '</span><div><p class="eyebrow">Tu atril</p><strong>' + part + '</strong></div>' : '';
     list.innerHTML = works.length ? [...Map.groupBy(works,work => work.genre || 'Sin género')].map(([group,items]) =>
       '<section class="stack catalog-group">' + sectionTitle(group) + '<div class="catalog-grid">' + items.map(work => {
         const preferred = work.scores.find(file => matchesScore(file,state.member));
         const file = preferred ?? (currentScope() === 'all' ? work.scores.find(file => !file.archived) : undefined);
         return '<article class="card stack catalog-work"><div class="member-heading"><span class="tile">' + icon('repertorio') +
-          '</span><div><h3>' + esc(work.title) + '</h3><p class="muted">' + esc(work.authors) + '</p></div></div>' +
+          '</span><div><h3>' + esc(work.title) + '</h3><p class="muted">' +
+          [work.authors,work.genre].filter(Boolean).map(esc).join(' · ') + '</p></div></div>' +
           (file ? scoreRow(file,ctx) : '') + '<a class="button quiet event-action" href="#/repertorio/' + esc(work.id) +
           '">Ver obra' + icon('right') + '</a></article>';
       }).join('') + '</div></section>').join('') :
@@ -153,8 +158,9 @@ function scoreRow(file, ctx) {
   const size = new Intl.NumberFormat('es-ES',{ maximumFractionDigits:1 }).format(file.bytes / 1024);
   return '<div class="score-row"><span class="tile">' + icon('file') + '</span><div class="row-copy"><strong>' +
     [file.instrument,file.voice].filter(Boolean).map(esc).join(' · ') + '</strong><span class="muted">PDF · ' + size + ' KB</span><div>' +
-    pill(status, !file.approved ? 'waiting' : saved ? 'good' : '') + '</div></div><div class="score-actions">' +
-    (!state.offline ? '<a class="text-link" href="/api/files/' + file.id + '" target="_blank" rel="noopener">Abrir PDF</a>' : '') +
+    pill(status, !file.approved ? 'waiting' : saved ? 'good' : file.archived ? '' : 'info') + '</div></div><div class="score-actions">' +
+    (!state.offline ? '<a class="button quiet" href="/api/files/' + file.id + '" target="_blank" rel="noopener">' +
+      icon('file') + 'Abrir PDF</a>' : '') +
     (saved ? button('Abrir PDF guardado','secondary','data-open="' + file.id + '"') +
       button('Exportar copia guardada','secondary','data-download="' + file.id + '"') :
       (!state.offline && file.approved && !file.archived ? button('Guardar sin conexión','secondary','data-save="' + file.id + '"') : '')) +
