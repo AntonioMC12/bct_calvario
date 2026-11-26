@@ -21,14 +21,16 @@ export function repertoire(content, ctx, id, action) {
   const currentScope = () => management ? scope : 'mine';
   const genres = [...new Set(state.data.works.map(work => work.genre).filter(Boolean))].sort((a,b) => a.localeCompare(b,'es'));
   if (!genres.includes(genre)) genre = '';
-  const uploadTools = canManageScores(state) ? link('Cargar partituras','#/repertorio/archivo') +
-    link('Validar partituras','#/repertorio/validacion') : '';
+  const uploadTools = canManageScores(state) ? '<div class="catalog-management" role="group" aria-label="Gestión de partituras">' +
+    '<a class="button primary" href="#/repertorio/archivo">' + icon('upload') + '<span>Cargar partituras</span></a>' +
+    '<a class="button secondary" href="#/repertorio/validacion">' + icon('check-ring') + '<span>Validar partituras</span></a></div>' : '';
   const hasPublished = state.data.works.some(work => work.scores.some(file => file.approved && !file.archived));
   const downloadTools = !state.offline && hasPublished ? link('Descarga por lotes','#/repertorio/descarga') +
     (!management ? '<button class="button primary" type="button" id="download-mine">' + icon('download') +
     'Descargar mis partituras</button>' : '') : '';
-  const tools = uploadTools || downloadTools ? '<div class="actions">' + uploadTools + downloadTools + '</div>' : '';
-  content.innerHTML = header('Repertorio',management ? 'Partituras de la banda' : 'Partituras para tu instrumento y voz',tools) +
+  const tools = uploadTools || downloadTools ? '<div class="catalog-actions">' + uploadTools +
+    (downloadTools ? '<div class="actions">' + downloadTools + '</div>' : '') + '</div>' : '';
+  content.innerHTML = header('Repertorio',management ? 'Partituras de la banda' : 'Partituras para tu instrumento y voz') + tools +
     '<div class="stack catalog-panel"><div class="card catalog-filters"><div class="search-field">' + icon('search') +
     '<label><span class="sr-only">Buscar por título, autoría o género</span><input type="search" name="query" autocomplete="off" ' +
     'placeholder="Buscar por título, autoría o género" value="' + esc(query) + '"></label></div>' +

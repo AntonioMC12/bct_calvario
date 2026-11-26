@@ -2,8 +2,13 @@
 
 El [estado y los pendientes de Calvario](estado-y-pendientes.md) recoge la cobertura actual y los requisitos añadidos el 26 de noviembre de 2026. Las entradas siguientes conservan el historial de cada entrega.
 
+## 2026-11-26 · Acciones de Dirección en Repertorio
+
+- «Cargar partituras» y «Validar partituras» aparecen juntas sobre los filtros, con iconos y jerarquía de botón principal y secundario. En móviles estrechos se apilan. Se verificaron los dos destinos y la vista de músico en la demo. Pasaron las 29 pruebas de `npm test`.
+
 ## 2026-11-26 · Asistencia desde Inicio y mapa de la convocatoria
 
+- Los iconos y textos de «Asistiré» y «No asistiré» quedan centrados en ambos estados. Se comprobó en la demo tras seleccionar cada respuesta. Pasaron las 29 pruebas y la caché de la PWA pasa a `v17`.
 - El próximo ensayo con respuestas abiertas permite indicar «Asistiré» o «No asistiré» directamente desde Inicio. Si antes hay otro evento, el ensayo tiene su propia tarjeta. Se reutilizan el guardado, la cola sin conexión y el cierre de respuestas de las convocatorias. El motivo opcional se edita en el detalle.
 - El detalle incorpora un mapa de Google Maps con el lugar y la localidad de la convocatoria, seguido de los accesos a Mapas y al archivo de calendario. El punto de encuentro permanece como indicación de texto. El mapa requiere conexión y la caché de la PWA pasa a `v16`.
 - Pasaron `npm run check` y las 29 pruebas de `npm test`. En la demo del navegador se enviaron ambas respuestas desde Inicio, se verificó la selección tras recargar y se comprobó que carga el mapa integrado.
