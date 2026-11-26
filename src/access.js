@@ -4,20 +4,23 @@ import { optionLists } from './part-options.js';
 
 export const mailRoutes = ['recuperar','restablecer','verificar'];
 const newPassword = 'type="password" required minlength="12" maxlength="128" autocomplete="new-password"';
-const emailField = () => authField('email','Correo electrónico','mail',
-  'type="email" required autocomplete="email" maxlength="254" placeholder="tu@correo.es"');
+const emailKey = 'calvario:correo-recordado';
+const emailField = (suffix = '') => authField('email','Correo electrónico','mail',
+  'type="email" required autocomplete="email" maxlength="254" placeholder="tu@correo.es"',suffix);
 
-function authField(name, label, glyph, attributes, action = '') {
-  return '<div class="auth-field"><label for="auth-' + name + '">' + label + '</label><div class="auth-input">' +
+function authField(name, label, glyph, attributes, action = '', assistance = '') {
+  return '<div class="auth-field"><div class="auth-label"><label for="auth-' + name + '">' + label + '</label>' +
+    assistance + '</div><div class="auth-input">' +
     icon(glyph) + '<input id="auth-' + name + '" name="' + name + '" ' + attributes + '>' + action + '</div></div>';
 }
 
 function accessFrame(body) {
   return '<main class="access"><div class="access-brand">' +
-    '<div class="access-emblem"><img src="./public/escudo.png" alt="Escudo de la banda" width="64" height="64"></div>' +
-    '<div class="access-identity"><p class="access-kicker">Banda de Cornetas y Tambores</p>' +
-    '<p class="access-wordmark">Calvario</p><p class="access-fullname">Santísimo Cristo del Calvario</p></div></div>' +
-    '<div class="access-body"><section class="access-panel">' + body + '</section></div></main>';
+    '<div class="access-emblem" aria-hidden="true"><span><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" focusable="false">' +
+    '<path d="M5 16 3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>Calvario</span></div>' +
+    '<p class="access-kicker">Banda de Cornetas y Tambores</p><p class="access-wordmark">Calvario</p>' +
+    '<p class="access-fullname">Santísimo Cristo del Calvario</p></div>' +
+    '<section class="access-panel">' + body + '</section></main>';
 }
 
 function showAccess(shell, body) {
@@ -44,26 +47,41 @@ function accountStatus(member) {
 }
 
 function accessForm(requesting, offline, mailEnabled, values) {
-  const password = requesting ? newPassword : 'type="password" required maxlength="128" autocomplete="current-password"';
-  const tab = (title, href, glyph, active) => '<a href="' + href + '"' + (active ? ' aria-current="page"' : '') + '>' + icon(glyph) + title + '</a>';
+  const password = requesting ? newPassword :
+    'type="password" required maxlength="128" autocomplete="current-password" placeholder="••••••••••••"';
   const reveal = '<button type="button" class="auth-reveal" id="show-password" aria-label="Mostrar contraseña" aria-pressed="false">' +
     icon('eye') + '</button>';
-  return (mailEnabled ? '<nav class="access-tabs" aria-label="Entrada a Calvario">' + tab('Acceso','#/inicio','lock',!requesting) +
-    tab('Solicitar acceso','#/solicitud','plus',requesting) + '</nav>' : '') +
-    header(requesting ? 'Únete a la banda' : 'Inicia sesión',
-      requesting ? 'Dirección revisará tu solicitud después de que confirmes el correo.' : 'Entra con el correo de tu cuenta.',
-      '', 'Portal de componentes') +
+  const recovery = !requesting && mailEnabled ? link('¿Olvidaste tu clave?','#/recuperar') : '';
+  const voice = '<span class="auth-voice" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" focusable="false">' +
+    '<path d="M12 2v20M17 5v14M7 8v8M2 11v2M22 10v4"/></svg></span>';
+  return (requesting ? back('Acceso','#/inicio') + header('Únete a la banda',
+    'Dirección revisará tu solicitud después de que confirmes el correo.','','Portal de componentes') :
+    '<header class="page-head cinematic-heading"><div class="cinematic-meta"><p class="eyebrow">Portal de componentes</p>' +
+    '<span class="cinematic-badge">Área privada</span></div><h1 tabindex="-1">Inicia sesión</h1>' +
+    '<p class="muted">Introduce las credenciales oficiales de tu cuenta.</p></header>') +
     (offline ? '<p class="callout">Necesitas conexión para entrar o solicitar acceso.</p>' : '') +
-    '<form class="stack" id="access-form">' +
+    '<form class="stack cinematic-form" id="access-form">' +
     (requesting ? authField('name','Nombre y apellidos','perfil','required autocomplete="name" maxlength="120"') : '') +
-    emailField() + authField('password','Contraseña','lock',password,reveal) +
+    emailField(requesting ? '' : voice) + authField('password','Contraseña','lock',password,reveal,recovery) +
     (requesting ? '<p class="muted">Usa una contraseña de al menos 12 caracteres.</p><div class="field-grid">' +
       field('instrument','Instrumento','required maxlength="80" list="instrument-options"') +
       field('voice','Voz','maxlength="80" list="voice-options"') + '</div>' + optionLists(values) :
-      (mailEnabled ? '<div class="auth-recovery">' + link('¿Has olvidado tu contraseña?','#/recuperar') + '</div>' : '')) +
-    errorRegion + '<button class="button primary access-submit">' + icon(requesting ? 'arrow' : 'login') +
-    (requesting ? 'Enviar solicitud' : 'Entrar') + '</button></form>' +
-    (mailEnabled ? '' : '<p class="muted access-help">' + icon('shield') + 'Solicita el alta a Dirección si todavía no tienes cuenta.</p>');
+      '<label class="auth-remember"><input id="remember-email" type="checkbox"> Recordar mi correo en este dispositivo</label>') +
+    errorRegion + '<button type="submit" class="button primary access-submit">' + icon(requesting ? 'arrow' : 'login') +
+    (requesting ? 'Enviar solicitud' : 'Entrar') + '</button></form>';
+}
+
+function accessFooter(mailEnabled) {
+  return '<footer class="access-help">' + icon('shield') +
+    '<p>Portal de acceso exclusivo para componentes, aspirantes y dirección. ' +
+    (mailEnabled ? '<a href="#/solicitud">Solicitar alta a Secretaría</a>.' : 'Solicita el alta a Dirección.') + '</p></footer>';
+}
+
+function rememberEmail(email) {
+  try {
+    if (email) localStorage.setItem(emailKey,email.trim());
+    else localStorage.removeItem(emailKey);
+  } catch {}
 }
 
 function mailForm(route) {
@@ -119,11 +137,14 @@ export function access(shell, ctx, route, id) {
     return;
   }
   const google = !member && !ctx.state.offline && ctx.state.google;
-  const federated = google ? '<p class="auth-divider">O continúa con</p><form class="stack google-access" id="google-form">' + errorRegion +
-    googleButton('Continuar con Google') + '</form>' : '';
+  const federated = '<p class="auth-divider">O accede mediante</p><form class="stack google-access" id="google-form"' +
+    (google ? '' : ' aria-label="Acceso con Google no disponible" title="Acceso con Google no disponible"') + '>' +
+    errorRegion + googleButton('Acceder con Google') + '</form>';
   showAccess(shell,member && member.status !== 'active' ? accountStatus(member) :
-    accessForm(requesting,ctx.state.offline,ctx.state.mailEnabled,ctx.state.catalogValues) + federated);
-  if (google) bindGoogle(shell.querySelector('#google-form'),google,async idToken => {
+    accessForm(requesting,ctx.state.offline,ctx.state.mailEnabled,ctx.state.catalogValues) +
+    (!requesting || google ? federated : '') + (requesting ? '' : accessFooter(ctx.state.mailEnabled)));
+  const googleForm = shell.querySelector('#google-form');
+  if (google && googleForm) bindGoogle(googleForm,google,async idToken => {
     try {
       await ctx.api('/auth/google','POST',{ mode:'login',idToken });
       history.replaceState(null,'','#/inicio');
@@ -141,6 +162,17 @@ export function access(shell, ctx, route, id) {
     ctx.toast('Revisa tu bandeja de entrada. El enlace puede tardar en llegar.');
   });
   const form = shell.querySelector('#access-form');
+  const remember = form?.querySelector('#remember-email');
+  if (remember) {
+    try {
+      const email = localStorage.getItem(emailKey);
+      if (email) {
+        form.elements.email.value = email;
+        remember.checked = true;
+      }
+    } catch {}
+    remember.addEventListener('change', () => { if (!remember.checked) rememberEmail(''); });
+  }
   const reveal = form?.querySelector('#show-password');
   if (reveal) reveal.onclick = () => {
     const visible = form.elements.password.type === 'password';
@@ -150,6 +182,7 @@ export function access(shell, ctx, route, id) {
   };
   if (form) bindForm(form,async input => {
     await ctx.signIn(requesting,input);
+    if (remember?.checked) rememberEmail(input.email);
     history.replaceState(null,'','#/inicio');
     await ctx.bootstrap();
   });

@@ -2,6 +2,13 @@
 
 El [estado y los pendientes de Calvario](estado-y-pendientes.md) recoge la cobertura actual y los requisitos añadidos el 26 de noviembre de 2026. Las entradas siguientes conservan el historial de cada entrega.
 
+## 2026-11-26 · Login Cinemático de Stitch
+
+- El acceso reproduce la composición móvil de «Login Cinemático · CALVARIO» con la fotografía original de Stitch, la corona, Cinzel, Plus Jakarta Sans y el formulario marfil. En escritorio se centra el marco de la maqueta. Los indicadores del dispositivo los aporta el sistema. [Proyecto de Stitch](https://stitch.withgoogle.com/projects/5747176225622362011)
+- Los campos y enlaces usan los métodos configurados en Calvario. El selector de recuerdo guarda solo el correo cuando se activa y se completa el acceso. Al desactivarlo se borra el correo guardado. El acceso con Google queda deshabilitado cuando el proveedor no está configurado.
+- La fotografía y Plus Jakarta Sans se sirven desde el mismo origen y se incluyen en la caché `v14`. El paquete estático incorpora la licencia SIL OFL de la fuente. [Plus Jakarta Sans en Google Fonts](https://fonts.google.com/specimen/Plus+Jakarta+Sans)
+- Pasaron `npm run check` y las 29 pruebas de `npm test`. La demo se comprobó en móvil y escritorio, con acceso, visibilidad de contraseña, recuerdo del correo, solicitud y recuperación. La publicación se inicia mediante `gh-pages`.
+
 ## 2026-11-26 · Renovación visual de Calvario
 
 - RF09–RF15, RF17–RF24 y RF29–RF41. Se revisaron las 16 pantallas de [Calvario PWA Gestión Banda en Stitch](https://stitch.withgoogle.com/projects/5747176225622362011). Inicio, Calendario, Repertorio, Avisos, Perfil y las herramientas de Dirección comparten tipografía Inter, identidad en Cinzel, fondo marfil y acentos rojos y dorados. Las composiciones se adaptan al ancho de pantalla y muestran los estados, datos y permisos de la aplicación.

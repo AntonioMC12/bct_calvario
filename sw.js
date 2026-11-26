@@ -1,10 +1,10 @@
 const app = new URL(self.registration.scope);
 const cachePrefix = 'calvario-shell-' + app.pathname + ':';
-const SHELL = cachePrefix + 'v13';
+const SHELL = cachePrefix + 'v14';
 const pushCache = 'calvario-device-push' + (app.pathname === '/' ? '' : app.pathname);
 const pushBinding = new URL('_calvario-push-binding',app).href;
 const assets = ['/', '/manifest.webmanifest', '/public/escudo.png', '/public/icon-192.png', '/public/icon-512.png',
-  '/public/inter.woff2', '/public/cinzel.woff2', '/public/login-hero.jpg',
+  '/public/inter.woff2', '/public/cinzel.woff2', '/public/plus-jakarta-sans.woff2', '/public/login-hero.jpg',
   '/src/main.js', '/src/ui.js', '/src/roles.js', '/src/time.js', '/src/storage.js', '/src/styles.css', '/src/theme.js',
   '/src/events.js', '/src/repertoire.js', '/src/management.js', '/src/material.js', '/src/part-options.js', '/src/parts.js',
   '/src/access.js', '/src/report.js',
