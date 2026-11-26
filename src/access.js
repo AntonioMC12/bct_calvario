@@ -5,8 +5,8 @@ import { optionLists } from './part-options.js';
 export const mailRoutes = ['recuperar','restablecer','verificar'];
 const newPassword = 'type="password" required minlength="12" maxlength="128" autocomplete="new-password"';
 const emailKey = 'calvario:correo-recordado';
-const emailField = (suffix = '') => authField('email','Correo electrónico','mail',
-  'type="email" required autocomplete="email" maxlength="254" placeholder="tu@correo.es"',suffix);
+const emailField = () => authField('email','Correo electrónico','mail',
+  'type="email" required autocomplete="email" maxlength="254" placeholder="tu@correo.es"');
 
 function authField(name, label, glyph, attributes, action = '', assistance = '') {
   return '<div class="auth-field"><div class="auth-label"><label for="auth-' + name + '">' + label + '</label>' +
@@ -16,11 +16,10 @@ function authField(name, label, glyph, attributes, action = '', assistance = '')
 
 function accessFrame(body) {
   return '<main class="access"><div class="access-brand">' +
-    '<div class="access-emblem" aria-hidden="true"><span><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" focusable="false">' +
-    '<path d="M5 16 3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>Calvario</span></div>' +
-    '<p class="access-kicker">Banda de Cornetas y Tambores</p><p class="access-wordmark">Calvario</p>' +
-    '<p class="access-fullname">Santísimo Cristo del Calvario</p></div>' +
-    '<section class="access-panel">' + body + '</section></main>';
+    '<div class="access-emblem"><img src="./public/escudo_calvario_vector.svg" width="1080" height="1080" alt="Escudo de la banda"></div>' +
+    '<p class="access-name"><span class="access-kicker">Banda de Cornetas y Tambores del</span> ' +
+    '<span class="access-wordmark">Santísimo Cristo del Calvario</span></p></div>' +
+    '<section class="access-panel"><div class="access-content">' + body + '</div></section></main>';
 }
 
 function showAccess(shell, body) {
@@ -52,8 +51,6 @@ function accessForm(requesting, offline, mailEnabled, values) {
   const reveal = '<button type="button" class="auth-reveal" id="show-password" aria-label="Mostrar contraseña" aria-pressed="false">' +
     icon('eye') + '</button>';
   const recovery = !requesting && mailEnabled ? link('¿Olvidaste tu clave?','#/recuperar') : '';
-  const voice = '<span class="auth-voice" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" focusable="false">' +
-    '<path d="M12 2v20M17 5v14M7 8v8M2 11v2M22 10v4"/></svg></span>';
   return (requesting ? back('Acceso','#/inicio') + header('Únete a la banda',
     'Dirección revisará tu solicitud después de que confirmes el correo.','','Portal de componentes') :
     '<header class="page-head cinematic-heading"><div class="cinematic-meta"><p class="eyebrow">Portal de componentes</p>' +
@@ -62,7 +59,7 @@ function accessForm(requesting, offline, mailEnabled, values) {
     (offline ? '<p class="callout">Necesitas conexión para entrar o solicitar acceso.</p>' : '') +
     '<form class="stack cinematic-form" id="access-form">' +
     (requesting ? authField('name','Nombre y apellidos','perfil','required autocomplete="name" maxlength="120"') : '') +
-    emailField(requesting ? '' : voice) + authField('password','Contraseña','lock',password,reveal,recovery) +
+    emailField() + authField('password','Contraseña','lock',password,reveal,recovery) +
     (requesting ? '<p class="muted">Usa una contraseña de al menos 12 caracteres.</p><div class="field-grid">' +
       field('instrument','Instrumento','required maxlength="80" list="instrument-options"') +
       field('voice','Voz','maxlength="80" list="voice-options"') + '</div>' + optionLists(values) :
@@ -151,7 +148,7 @@ export function access(shell, ctx, route, id) {
       await ctx.bootstrap();
     } catch (error) {
       if (error.code !== 'profile_required') throw error;
-      googleRegistration(shell.querySelector('.access-panel'),ctx,idToken);
+      googleRegistration(shell.querySelector('.access-content'),ctx,idToken);
     }
   });
   shell.querySelector('#retry')?.addEventListener('click',ctx.bootstrap);
