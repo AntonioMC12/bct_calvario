@@ -1,6 +1,6 @@
 # Calvario
 
-PWA para la Banda de Cornetas y Tambores Santísimo Cristo del Calvario. La versión 0.5 admite PostgreSQL en Supabase y conserva la demo SQLite. El núcleo incluye acceso con Google y Web Push configurables, recuperación de contraseña, asistencia, avisos, formaciones y partituras privadas.
+PWA para la Banda de Cornetas y Tambores del Santísimo Cristo del Calvario. La versión 0.5 admite PostgreSQL en Supabase y conserva la demo SQLite. El núcleo incluye acceso con Google y Web Push configurables, recuperación de contraseña, asistencia, avisos, formaciones y partituras privadas.
 
 ## Probar con datos ficticios
 

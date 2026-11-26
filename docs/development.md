@@ -2,6 +2,12 @@
 
 El [estado y los pendientes de Calvario](estado-y-pendientes.md) recoge la cobertura actual y los requisitos añadidos el 26 de noviembre de 2026. Las entradas siguientes conservan el historial de cada entrega.
 
+## 2026-11-26 · Acceso adaptable y escudo de la banda
+
+- El acceso presenta la portada y el formulario apilados en móvil y en dos columnas desde 840 px. La portada muestra el escudo vectorial facilitado y el nombre completo «Banda de Cornetas y Tambores del Santísimo Cristo del Calvario».
+- Los campos de acceso, alta y recuperación usan al menos 16 px para evitar que Safari en iOS amplíe la página al enfocarlos. Se conserva el zoom manual. El escudo se sirve en el paquete del piloto y se precarga en la caché `v15`.
+- Pasaron `npm run check`, las 29 pruebas de `npm test` y la compilación del piloto. La demo se comprobó en vistas de 320 a 1440 px, incluida una vista horizontal. Se probó el acceso, la visibilidad de la contraseña y la navegación a alta y recuperación. Queda pendiente probar el foco con el teclado de un iPhone físico.
+
 ## 2026-11-26 · Login Cinemático de Stitch
 
 - El acceso reproduce la composición móvil de «Login Cinemático · CALVARIO» con la fotografía original de Stitch, la corona, Cinzel, Plus Jakarta Sans y el formulario marfil. En escritorio se centra el marco de la maqueta. Los indicadores del dispositivo los aporta el sistema. [Proyecto de Stitch](https://stitch.withgoogle.com/projects/5747176225622362011)
