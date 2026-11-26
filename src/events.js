@@ -1,4 +1,4 @@
-import { actionLink, area, attendanceBadge, back, bindForm, button, dateOnly, dayKey, empty, errorRegion, esc, eventCard, field, fullDate,
+import { actionLink, area, attendanceBadge, back, bindForm, button, dateOnly, dayKey, displayTime, empty, errorRegion, esc, eventCard, field, fullDate,
   header, icon, instrument, intention, normalize, options, otherIntention, pill, presence, row, sectionTitle, segment, timeRange } from './ui.js';
 import { canManage } from './roles.js';
 
@@ -107,8 +107,16 @@ export async function eventPage(content, ctx, id, action) {
       attendees(content, detail.roster, manager(state));
     } else if (action === 'corregir' && manager(state)) {
       corrections(content,ctx,event,detail.roster.filter(member => member.active && member.id !== state.member.id));
-    } else if (action === 'pasar-lista' && manager(state) && !event.cancelled && !open) {
-      rollCall(content,ctx,event,detail.roster.filter(member => member.active));
+    } else if (action === 'pasar-lista' && manager(state)) {
+      if (event.cancelled || !event.roll_call) {
+        content.insertAdjacentHTML('beforeend',empty(event.cancelled ?
+          'La convocatoria está cancelada.' : 'La lista de presencia se activa al editar este evento.'));
+      } else if (open) {
+        content.insertAdjacentHTML('beforeend','<section class="card stack"><h2>La lista se abre al comenzar</h2><p class="muted">' +
+          displayTime(event.starts) + ' · Hora de Madrid</p></section>');
+      } else {
+        rollCall(content,ctx,event,detail.roster.filter(member => member.active));
+      }
     } else {
       content.insertAdjacentHTML('beforeend',empty('Esta acción requiere permisos de gestión y depende del estado del evento.'));
     }
@@ -124,6 +132,9 @@ export async function eventPage(content, ctx, id, action) {
     '<section class="card stack event-overview">' + header(event.title, '',
       manager(state) && !event.cancelled ? actionLink('Editar',href + '/editar') : '', event.type) +
     (event.cancelled ? '<div class="callout"><strong>Evento cancelado</strong><p>La convocatoria se conserva en el historial.</p></div>' : '') +
+    (manager(state) && event.roll_call && !event.cancelled ? '<div class="event-roll-action">' +
+      '<a class="button primary event-action" href="' + href + '/pasar-lista">' + icon('clipboard') + 'Pasar lista</a>' +
+      (open ? '<p class="muted">La lista se abre al comenzar la convocatoria.</p>' : '') + '</div>' : '') +
     (event.description ? '<p class="pre">' + esc(event.description) + '</p>' : '') +
     '<div class="event-facts"><div class="info-line"><span class="tile">' + icon('clock') + '</span><div><strong>' + fullDate(event.starts) +
     '</strong><p class="muted">' + timeRange(event) + ' · Hora de Madrid · Fin aproximado</p></div></div>' +
@@ -154,7 +165,6 @@ export async function eventPage(content, ctx, id, action) {
       'Responder asistencia</span>' + icon('arrow') + '</a>' : '') +
     '</section>' + (detail ? '<div class="row-list event-links">' +
     row('Asistentes',responses,href + '/asistentes','users') +
-    (manager(state) && !event.cancelled && !open ? row('Pasar lista','Registrar presencia real',href + '/pasar-lista','check') : '') +
     (manager(state) ? row('Corregir intención','Revisar respuestas y motivos',href + '/corregir','perfil') +
       row('Formación','Editar posiciones y plantillas',href + '/formacion','grid') : '') +
     '</div>' : '') + '</div>' + (detail ? '<section class="card stack event-documents"><h2>' + icon('folder') + 'Documentación</h2>' +

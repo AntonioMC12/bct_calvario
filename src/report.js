@@ -1,5 +1,5 @@
-import { back, bindForm, button, dayKey, displayTime, empty, errorRegion, esc, field, header,
-  options, row, sectionTitle } from './ui.js';
+import { actionLink, back, bindForm, button, dayKey, displayTime, empty, errorRegion, esc, field, header,
+  icon, options, row, sectionTitle } from './ui.js';
 import { canManage } from './roles.js';
 
 const columns = [
@@ -56,9 +56,11 @@ export function attendanceReportPage(content, ctx) {
   const monthStart = today.slice(0,8) + '01';
   const types = ['Ensayo','Actuación','Reunión','Procesión','Certamen','Concierto'];
   content.innerHTML = '<section class="attendance-report">' + previous + header('Informe de asistencia','Intención y presencia por periodo') +
-    '<form class="card stack report-filter"><div class="field-grid">' + field('from','Desde','type="date" required',monthStart) +
-    field('to','Hasta','type="date" required',today) + '<label>Tipo de evento<select name="type"><option value="">Todos</option>' +
-    options(Object.fromEntries(types.map(type => [type,type]))) + '</select></label></div>' + errorRegion + button('Consultar informe') + '</form>' +
+    '<form class="card stack report-filter"><fieldset class="report-period"><legend>Periodo</legend><div class="report-dates">' +
+    field('from','Desde','type="date" required',monthStart) + field('to','Hasta','type="date" required',today) + '</div></fieldset>' +
+    '<label>Tipo de evento<select name="type"><option value="">Todos los tipos</option>' +
+    options(Object.fromEntries(types.map(type => [type,type]))) + '</select></label>' + errorRegion +
+    '<button class="button primary">' + icon('chart') + 'Consultar informe</button></form>' +
     '<div id="attendance-report-results" class="stack"></div></section>';
   const form = content.querySelector('form');
   const target = content.querySelector('#attendance-report-results');
@@ -68,7 +70,9 @@ export function attendanceReportPage(content, ctx) {
     try { report = await ctx.api('/reports/attendance','POST',input); }
     catch (error) { target.innerHTML = ''; throw error; }
     if (!report.rows.length) {
-      target.innerHTML = empty('No hay eventos iniciados y vigentes en el periodo seleccionado.');
+      target.innerHTML = '<section class="card stack report-empty"><span class="tile">' + icon('clipboard') + '</span>' +
+        '<div><h2>Sin convocatorias en este periodo</h2><p class="muted">El informe incluye eventos iniciados, sin cancelar y con lista de presencia habilitada.</p></div>' +
+        actionLink('Ir a Pasar lista','#/gestion/presencia') + '</section>';
       return;
     }
     const events = Map.groupBy(report.rows,item => item.id);

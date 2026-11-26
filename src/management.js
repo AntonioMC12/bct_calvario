@@ -59,9 +59,22 @@ export async function management(content, ctx, mode, action) {
     };
     const [title,path,glyph] = routes[mode];
     const previous = back('Gestión','#/gestion');
-    const events = [...ctx.state.data.events].filter(event => mode !== 'presencia' ||
-      (!event.cancelled && Date.parse(event.starts) <= Date.now()));
-    if (mode === 'presencia') events.reverse();
+    const events = ctx.state.data.events;
+    if (mode === 'presencia') {
+      const enabled = events.filter(event => event.roll_call && !event.cancelled);
+      const upcoming = enabled.filter(event => Date.parse(event.starts) > Date.now());
+      const available = enabled.filter(event => Date.parse(event.starts) <= Date.now()).reverse();
+      const eventGroup = (label, items) => items.length ? '<section class="stack">' + sectionTitle(label) +
+        '<div class="row-list">' + items.map(event => row(event.title, event.type + ' · ' + displayTime(event.starts),
+          eventRoute(event.id) + '/' + path,glyph)).join('') + '</div></section>' : '';
+      content.innerHTML = previous + header(title,'Convocatorias con lista de presencia') +
+        '<div class="stack">' + eventGroup('Disponibles',available) +
+        eventGroup('Se abren al comenzar',upcoming) + (!enabled.length ?
+          '<section class="card stack"><h2>Aún no hay listas de presencia</h2>' +
+          '<p class="muted">Activa «Pasar lista» al crear o editar una convocatoria.</p>' +
+          actionLink('Ir al calendario','#/calendario','calendario') + '</section>' : '') + '</div>';
+      return;
+    }
     content.innerHTML = previous + header(title,'Selecciona una convocatoria') + (events.length ? '<div class="row-list">' +
       events.map(event => row(event.title, displayTime(event.starts) + (event.cancelled ? ' · Cancelado' : ''),
         eventRoute(event.id) + '/' + path,glyph)).join('') + '</div>' : empty('No hay convocatorias disponibles para esta herramienta.'));
@@ -181,6 +194,9 @@ export async function eventEditor(content, ctx, id) {
     '<div class="event-layout"><form class="card stack" id="event-form"><h2>Convocatoria</h2>' +
     field('title','Título','required maxlength="120"',event.title) +
     '<label>Tipo<select name="type">' + options(Object.fromEntries(eventTypes.map(type => [type,type])),event.type) + '</select></label>' +
+    '<label class="choice event-roll-call"><input type="checkbox" name="roll_call"' +
+    ((creating || event.roll_call) ? ' checked' : '') + '><span><strong>Pasar lista</strong>' +
+    '<span class="muted">Dirección podrá registrar la presencia de todos los miembros activos al comenzar el evento.</span></span></label>' +
     '<div class="field-grid">' +
     field('starts','Inicio','required type="datetime-local"',event.starts && localMinute(event.starts)) +
     field('ends','Fin aproximado','required type="datetime-local"',event.ends && localMinute(event.ends)) + '</div>' +
@@ -201,6 +217,13 @@ export async function eventEditor(content, ctx, id) {
       '<section class="card stack"><h2>Cancelar convocatoria</h2><p class="muted">El evento seguirá en el calendario y se publicará un aviso.</p>' +
       '<form id="cancel">' + errorRegion + button('Cancelar evento','secondary') + '</form></section>') + '</div></div>';
   const form = content.querySelector('#event-form');
+  if (creating) {
+    const rollCall = form.elements.roll_call;
+    const useDefault = () => { if (!rollCall.dataset.changed) rollCall.checked = form.elements.type.value === 'Ensayo'; };
+    rollCall.onchange = () => { rollCall.dataset.changed = 'true'; };
+    form.elements.type.onchange = useDefault;
+    useDefault();
+  }
   const toggleReminder = () => {
     const enabled = form.elements.reminder.checked;
     form.querySelector('#reminder-minutes').hidden = !enabled;
@@ -210,7 +233,7 @@ export async function eventEditor(content, ctx, id) {
   toggleReminder();
   bindForm(form, async input => {
     const saved = await ctx.api(creating ? '/events' : '/events/' + id,creating ? 'POST' : 'PUT',{
-      ...input, version:event.version, reminder_minutes:input.reminder ? Number(input.minutes) : null,
+      ...input, version:event.version, roll_call:form.elements.roll_call.checked, reminder_minutes:input.reminder ? Number(input.minutes) : null,
     });
     await ctx.refresh();
     ctx.toast('Evento guardado');
