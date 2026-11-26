@@ -12,18 +12,24 @@ const membersRoute = '#/gestion/miembros';
 const editableMember = member => member.status === 'active' && member.role === 'musician';
 
 export function managementTools() {
-  return '<div class="row-list">' + row('Solicitudes','Revisar nuevas incorporaciones','#/gestion/solicitudes','users') +
-    row('Directorio','Miembros de la banda y cuentas de acceso',membersRoute,'perfil') +
-    row('Material','Inventario, préstamos y devoluciones','#/gestion/material','grid') +
-    row('Catálogo musical','Instrumentos, voces y géneros','#/gestion/catalogo','repertorio') +
-    row('Eventos','Crear, editar y cancelar convocatorias','#/calendario','calendario') +
-    row('Carga de partituras','Gestionar obras y subir PDF','#/repertorio/archivo','upload') +
-    row('Formaciones','Selecciona una convocatoria','#/gestion/formaciones','grid') +
-    row('Corregir intenciones','Selecciona una convocatoria','#/gestion/corregir','perfil') +
-    row('Pasar lista','Presencia real por convocatoria','#/gestion/presencia','check') +
-    row('Informe de asistencia','Consultar y exportar por periodo','#/gestion/asistencia','chart') +
-    row('Validar partituras','Revisar PDF pendientes de distribución','#/repertorio/validacion','file') +
-    row('Publicar aviso','Enviar a las cuentas activas','#/gestion/aviso','bell') + '</div>';
+  const group = (title, glyph, entries) => '<section class="management-group row-list"><header><span class="tile">' +
+    icon(glyph) + '</span><h3>' + title + '</h3></header>' + entries + '</section>';
+  return '<div class="management-grid">' +
+    group('Banda y material','users',
+      row('Solicitudes','Revisar nuevas incorporaciones','#/gestion/solicitudes','perfil') +
+      row('Directorio','Miembros y cuentas de acceso',membersRoute,'users') +
+      row('Material','Inventario, préstamos y devoluciones','#/gestion/material','box')) +
+    group('Convocatorias y asistencia','calendario',
+      row('Eventos','Crear, editar y cancelar convocatorias','#/calendario','calendario') +
+      row('Formaciones','Distribuir puestos y gestionar plantillas','#/gestion/formaciones','grid') +
+      row('Corregir intenciones','Revisar respuestas de asistencia','#/gestion/corregir','perfil') +
+      row('Pasar lista','Registrar presencia real','#/gestion/presencia','clipboard') +
+      row('Informe de asistencia','Consultar y exportar por periodo','#/gestion/asistencia','chart')) +
+    group('Archivo y comunicación','folder',
+      row('Catálogo musical','Instrumentos, voces y géneros','#/gestion/catalogo','repertorio') +
+      row('Carga de partituras','Gestionar obras y subir PDF','#/repertorio/archivo','upload') +
+      row('Validar partituras','Revisar PDF pendientes de distribución','#/repertorio/validacion','check-ring') +
+      row('Publicar aviso','Enviar a las cuentas activas','#/gestion/aviso','announce')) + '</div>';
 }
 
 export function pdfContent(file) {
@@ -315,14 +321,17 @@ export async function formationEditor(content, ctx, id) {
       '<details class="formation-tools"><summary>Cambiar cuadrícula</summary><form id="reshape" class="stack"><div class="field-grid">' +
       field('columns','Columnas','required type="number" min="1" max="12"',columns) +
       field('rows','Filas','required type="number" min="1" max="240"',positions.length / columns) +
-      '</div>' + errorRegion + button('Aplicar medidas','quiet') + '</form></details><p class="formation-front">↑ Frente de la banda</p>' +
+      '</div>' + errorRegion + button('Aplicar medidas','quiet') + '</form></details><p class="formation-front">' +
+      icon('up') + 'Frente de la banda</p>' +
       '<div class="formation-scroll" tabindex="0" role="region" aria-label="Cuadrícula de la formación"><table class="formation-grid"><thead><tr><td></td>' +
       Array.from({length:columns},(_,col) => '<th scope="col">C' + (col + 1) + '</th>').join('') + '</tr></thead><tbody>' +
       Array.from({length:positions.length / columns},(_,r) => '<tr><th scope="row">' + (r + 1) + '</th>' + positions.slice(r * columns,(r + 1) * columns).map((person,c) => {
         const pos = r * columns + c;
         const member = people.get(person);
-        return '<td><button type="button" data-position="' + pos + '" aria-pressed="' + (pos === selected) + '">' +
-          '<span>' + coordinate(pos) + '</span><strong>' + esc(member?.name ?? 'Vacío') + '</strong>' +
+        return '<td><button type="button" data-position="' + pos + '" aria-pressed="' + (pos === selected) + '"' +
+          (member ? '' : ' class="slot-empty"') + '><span>' + coordinate(pos) + '</span>' +
+          (member ? '<span class="slot-avatar">' + initials(member.name) + '</span>' : icon('plus')) +
+          '<strong>' + esc(member?.name ?? 'Vacío') + '</strong>' +
           (member ? '<span>' + instrument(member) + '</span>' : '') + '</button></td>';
       }).join('') + '</tr>').join('') + '</tbody></table></div><form class="stack" id="save-formation">' + errorRegion +
       '<p class="muted" role="status">' + (changed ? 'Hay cambios sin guardar.' : 'No hay cambios pendientes.') + '</p><div class="actions">' +

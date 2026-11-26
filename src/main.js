@@ -20,6 +20,7 @@ const destinations = [['inicio','Inicio'], ['calendario','Calendario'], ['repert
 const state = { member:null, data:null, pending:{}, saved:new Set(), offline:false, cacheReady:false,
   mailEnabled:!hosted, pilotUnavailable:hosted };
 let rendering = 0;
+let lastPage;
 let toastTimer;
 
 export async function api(path, method = 'GET', data, timeout = 12000) {
@@ -228,6 +229,7 @@ async function logout() {
   }
   suspendSession();
   await reset();
+  toast('');
   go('#/inicio');
   render();
 }
@@ -257,18 +259,23 @@ function home(data) {
   const memberPart = instrument(data.member);
   const personal = data.works.flatMap(work => work.scores.filter(file => matchesScore(file, data.member))
     .map(file => ({ work, file }))).slice(0,3);
-  return '<div class="home-view">' + header('Tu banda, al día', '', '', fullDate(new Date())) +
-    '<div class="home-grid"><section>' + sectionTitle('Próximo evento', link('Calendario','#/calendario'), 'calendario') +
+  return '<div class="home-view"><div class="home-intro"><p class="brand home-wordmark">Calvario</p>' +
+    header('Tu banda, al día', '', '', fullDate(new Date())) + '</div>' +
+    '<div class="home-grid"><section>' + sectionTitle('Próximo evento', link('Ver calendario','#/calendario'), 'calendario') +
     (next ? eventCard(next, state.pending[next.id], { featured:true }) : empty('No hay próximas convocatorias.')) +
     '</section><div class="home-sections">' +
-    (unread.length ? '<section>' + sectionTitle('Avisos', link('Ver todos','#/avisos'), 'bell') +
-      '<p class="home-section-note">' + pill(unread.length + (unread.length === 1 ? ' pendiente' : ' pendientes'), 'accent') + '</p>' +
+    (unread.length ? '<section class="home-notices">' + sectionTitle('Avisos', link('Ver todos','#/avisos'), 'announce',
+      pill(unread.length + (unread.length === 1 ? ' nuevo' : ' nuevos'), 'accent')) +
       '<div class="row-list">' + unread.slice(0,2).map(notice =>
-        row(notice.title, displayTime(notice.created_at), '#/avisos/' + notice.id, 'bell')).join('') + '</div></section>' : '') +
+        '<a class="row home-notice" href="#/avisos/' + esc(notice.id) + '"><span class="tile">' + icon('bell') + '</span>' +
+        '<span class="row-copy"><span class="home-notice-date muted">' + displayTime(notice.created_at) + '</span><strong>' +
+        esc(notice.title) + '</strong><span class="muted excerpt">' + esc(notice.message) + '</span></span>' + icon('right') + '</a>').join('') +
+      '</div></section>' : '') +
     '<section>' + sectionTitle('Para tu instrumento', link('Repertorio','#/repertorio'), 'repertorio') +
-    (memberPart ? '<p class="home-section-note muted">' + memberPart + '</p>' : '') +
-    (personal.length ? '<div class="row-list">' + personal.map(({ work, file }) =>
-      row(work.title, [file.instrument, file.voice, 'PDF'].filter(Boolean).join(' · '), '#/repertorio/' + work.id, 'file')).join('') +
+    (memberPart ? '<p class="home-section-note muted">Tu parte · ' + memberPart + '</p>' : '') +
+    (personal.length ? '<div class="home-scores">' + personal.map(({ work, file }) =>
+      row(work.title, [work.authors,state.saved.has(file.id) ? 'Guardada sin conexión' : 'PDF'].filter(Boolean).join(' · '),
+        '#/repertorio/' + work.id, 'file')).join('') +
     '</div>' : empty('Aún no hay partituras para tu instrumento y voz.')) + '</section></div></div></div>';
 }
 
@@ -279,11 +286,12 @@ function bindNotices(content, id) {
     const notice = data.notices.find(item => item.id === id);
     if (!notice) return void (content.innerHTML = back('Avisos','#/avisos') + empty('Aviso no encontrado.'));
     content.innerHTML = back('Avisos','#/avisos') + '<article class="card stack notice-detail">' +
-      header(notice.title, displayTime(notice.created_at), '', 'Aviso') + '<p class="pre">' + esc(notice.message) + '</p>' +
+      header(notice.title, displayTime(notice.created_at), '', 'Aviso') + '<p class="pre notice-message">' + esc(notice.message) + '</p>' +
       (notice.event_id ? row('Ver evento', '', '#/calendario/' + notice.event_id, 'calendario') : '') +
       (notice.read_at ? pill('Lectura confirmada · ' + displayTime(notice.read_at),'good') :
         state.offline ? pill('Pendiente de lectura','waiting') : '<form class="stack">' +
-          '<p class="muted">Abrir el aviso no confirma su lectura.</p>' + errorRegion + button('Confirmar lectura') + '</form>') + '</article>' +
+          errorRegion + '<button class="button primary">' + icon('check-ring') + 'Confirmar lectura</button>' +
+          '<p class="muted align-center">Abrir el aviso no confirma su lectura.</p></form>') + '</article>' +
       (canManage(state.member.role) && !state.offline ? '<section class="card stack notice-receipts"><h2>Confirmaciones de lectura</h2>' +
         '<p class="muted" role="status">Consultando confirmaciones…</p></section>' : '');
     const receipts = content.querySelector('.notice-receipts p');
@@ -302,15 +310,16 @@ function bindNotices(content, id) {
   }
   const unread = data.notices.filter(item => !item.read_at);
   const list = noticeFilter === 'all' ? data.notices : unread;
-  content.innerHTML = header('Avisos','Información de la banda',
+  content.innerHTML = '<div class="inbox-view">' + header('Avisos','Información de la banda',
     canManage(state.member.role) && !state.offline ? '<a class="button primary" href="#/gestion/aviso">' + icon('plus') + 'Nuevo aviso</a>' : '') +
     segment('Filtrar avisos',[['unread','Pendientes · ' + unread.length,'bell'],['all','Todos','list']],noticeFilter) +
-    '<div class="stack notice-list">' + (list.length ? list.map(item => '<article class="card stack notice-card">' +
-    '<div class="event-labels"><p class="notice-date muted">' + icon('bell') + displayTime(item.created_at) + '</p>' +
-    pill(item.read_at ? 'Lectura confirmada' : 'Lectura pendiente', item.read_at ? 'good' : 'waiting') + '</div>' +
+    '<div class="stack notice-list">' + (list.length ? list.map(item => '<article class="card stack notice-card' +
+    (item.read_at ? '' : ' unread') + '">' +
+    '<div class="event-labels"><p class="notice-date muted">' + icon('announce') + displayTime(item.created_at) + '</p>' +
+    pill(item.read_at ? 'Lectura confirmada' : 'Lectura pendiente', item.read_at ? 'good' : 'accent') + '</div>' +
     '<h2><a href="#/avisos/' + esc(item.id) + '">' + esc(item.title) + '</a></h2><p class="muted excerpt">' + esc(item.message) +
     '</p><a class="button quiet event-action" href="#/avisos/' + esc(item.id) + '">Abrir aviso' + icon('right') + '</a></article>').join('') :
-      empty(noticeFilter === 'all' ? 'Aún no hay avisos.' : 'Estás al día con tus avisos.')) + '</div>';
+      empty(noticeFilter === 'all' ? 'Aún no hay avisos.' : 'Estás al día con tus avisos.')) + '</div></div>';
   content.querySelector('.segments').addEventListener('click', event => {
     const value = event.target.closest('button')?.dataset.value;
     if (value) {
@@ -353,21 +362,32 @@ function profile(content, mode) {
   }
   const verified = history.filter(event => !event.cancelled && ['present','absent'].includes(event.presence));
   const attended = verified.filter(event => event.presence === 'present').length;
-  const activity = verified.length ? attended + ' de ' + verified.length + ' presencias comprobadas' : 'Intención y presencia por evento';
+  const rate = verified.length ? Math.round(attended * 100 / verified.length) : 0;
+  const part = instrument(member);
+  const ring = '<span class="attendance-ring" aria-hidden="true"><svg viewBox="0 0 44 44" focusable="false">' +
+    '<circle cx="22" cy="22" r="19"/><circle cx="22" cy="22" r="19" pathLength="100" stroke-dasharray="' + rate + ' 100"/>' +
+    '</svg><span>' + (verified.length ? rate + '%' : '—') + '</span></span>';
   content.innerHTML = header('Mi perfil') + '<div class="profile-layout"><div class="stack">' +
     '<section class="card profile-card"><span class="avatar large">' + initials(member.name) +
-    '</span><div><h2>' + esc(member.name) + '</h2><p class="muted">' + instrument(member) +
-    '</p>' + (member.email ? '<p class="muted">' + esc(member.email) + '</p>' : '') + pill(role[member.role],'accent') + '</div></section>' +
-    '<section>' + sectionTitle('Mi actividad','', 'chart') + '<div class="row-list">' + row('Mi historial',activity,'#/perfil/historial','clock') +
-    row('Descargas', state.saved.size + (state.saved.size === 1 ? ' partitura guardada' : ' partituras guardadas'),'#/perfil/descargas','file') +
-    '</div></section></div><div class="stack"><section>' + sectionTitle('Ajustes y cuenta','', 'perfil') + '<div class="row-list">' +
+    '</span><div class="profile-identity"><div class="profile-name"><h2>' + esc(member.name) + '</h2>' + pill(role[member.role],'accent') + '</div>' +
+    (part ? '<p class="profile-part muted">' + icon('repertorio') + part + '</p>' : '') +
+    (member.email ? '<p class="muted">' + esc(member.email) + '</p>' : '') + '</div></section>' +
+    '<section>' + sectionTitle('Mi actividad') + '<div class="profile-activity">' +
+    '<a class="card activity-tile" href="#/perfil/historial"><span class="activity-top"><span>Asistencia</span>' + ring + '</span><strong>' +
+    (verified.length ? attended + ' de ' + verified.length : 'Mi historial') + '</strong><span class="muted">' +
+    (verified.length ? 'Presencias comprobadas' : 'Intención y presencia') + '</span></a>' +
+    '<a class="card activity-tile" href="#/perfil/descargas"><span class="activity-top"><span>Sin conexión</span><span class="tile">' +
+    icon('download') + '</span></span><strong>' + state.saved.size + (state.saved.size === 1 ? ' partitura' : ' partituras') +
+    '</strong><span class="muted">Guardadas en este dispositivo</span></a></div></section></div>' +
+    '<div class="stack"><section>' + sectionTitle('Ajustes y cuenta') + '<div class="row-list">' +
     '<div class="row appearance-setting"><div><label for="theme-choice">Tema</label>' +
     '<p class="muted" id="theme-help">Se guarda en este dispositivo.</p></div>' +
     '<select id="theme-choice" aria-describedby="theme-help">' + options({ system:'Sistema',light:'Claro',dark:'Oscuro' },
       document.documentElement.dataset.themePreference ?? 'system') + '</select></div>' +
     (state.pushEnabled ? row('Notificaciones','Avisos en este dispositivo','#/perfil/notificaciones','avisos') : '') +
     (state.google ? row('Acceso con Google',member.google_linked ? 'Cuenta vinculada' : 'Vincular cuenta','#/perfil/google','perfil') : '') +
-    '<div class="row actions">' + button('Actualizar datos','quiet','id="retry"') + button('Cerrar sesión','quiet','id="signout"') + '</div></div></section>' +
+    '<div class="row actions">' + button('Actualizar datos','quiet','id="retry"') +
+    '<button class="button quiet signout" id="signout">' + icon('exit') + 'Cerrar sesión</button></div></div></section>' +
     (!state.offline && canManage(member.role) ? '<section>' + sectionTitle('Herramientas de gestión','', 'gestion') + managementTools() + '</section>' : '') +
     '</div></div>';
   content.querySelector('#retry').addEventListener('click', bootstrap);
@@ -402,23 +422,29 @@ async function render() {
   const [rawRoute, id, action] = location.hash.replace(/^#\/?/,'').split('/');
   const route = rawRoute || 'inicio';
   if (mailRoutes.includes(route) || state.member?.status !== 'active' || !state.data) {
+    lastPage = undefined;
     access(shell, { state, api, bootstrap, toast, logout, signIn }, route, id);
     return;
   }
   const active = route === 'gestion' ? 'perfil' : route;
+  const pageLabel = route === 'gestion' ? 'Gestión' : destinations.find(([key]) => key === route)?.[1] ?? 'Calvario';
   const nav = destinations.map(([key,label]) => '<a href="#/' + key + '" ' +
     (active === key ? 'aria-current="page"' : '') + '><span class="nav-glyph">' + icon(key === 'avisos' ? 'bell' : key) +
     (key === 'avisos' ? '<span class="nav-count" aria-hidden="true" hidden></span>' : '') +
     '</span><span>' + label + '</span></a>').join('');
-  const brand = '<a class="brand" href="#/inicio"><img src="./public/escudo.png" width="32" height="32" alt="">Calvario</a>';
+  const emblem = '<span class="brand-mark"><img src="./public/escudo.png" width="28" height="28" alt=""></span>';
+  const brand = '<a class="brand" href="#/inicio">' + emblem + 'Calvario</a>';
   shell.innerHTML = '<a class="skip" href="#content">Saltar al contenido</a><div class="layout"><aside class="rail">' +
     brand + '<nav aria-label="Navegación principal">' + nav +
     (!state.offline && canManage(state.member.role) ? '<a href="#/gestion"' + (route === 'gestion' ? ' aria-current="page"' : '') +
     '>' + icon('gestion') + '<span>Gestión</span></a>' : '') +
-    '</nav><span class="rail-footer">Banda de Cornetas y Tambores</span></aside><div class="main-area">' +
-    '<div class="mobile-brand">' + brand + '<a class="avatar" href="#/perfil" aria-label="Mi perfil">' +
+    '</nav><a class="rail-footer" href="#/perfil"><span class="avatar">' + initials(state.member.name) + '</span>' +
+    '<span class="rail-person"><strong>' + esc(state.member.name) + '</strong><span>' + esc(role[state.member.role]) + '</span></span></a>' +
+    '</aside><div class="main-area">' +
+    '<div class="mobile-brand"><div class="mobile-heading"><a class="mobile-emblem" href="#/inicio" aria-label="Inicio de Calvario">' +
+    emblem + '</a><span>' + esc(pageLabel) + '</span></div><a class="avatar" href="#/perfil" aria-label="Mi perfil">' +
     initials(state.member.name) + '</a></div><main id="content" tabindex="-1">' +
-    '<div id="connection"></div><div id="view"></div></main></div></div>';
+    '<div id="connection"></div><div id="view" data-section="' + esc(route) + '" data-root="' + (!id) + '"></div></main></div></div>';
   const skip = shell.querySelector('.skip');
   skip.addEventListener('click', event => { event.preventDefault(); shell.querySelector('main').focus(); });
   updateConnectionBanner();
@@ -446,6 +472,9 @@ async function render() {
     content.innerHTML = empty(error.message) + link('Volver al inicio','#/inicio');
   }
   if (token === rendering) {
+    const page = [route,id,action].join('/');
+    if (lastPage !== page) content.classList.add('view-enter');
+    lastPage = page;
     const heading = content.querySelector('h1');
     document.title = (heading ? heading.textContent + ' · ' : '') + 'Calvario';
     heading?.focus({ preventScroll: true });

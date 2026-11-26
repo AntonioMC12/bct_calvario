@@ -30,12 +30,18 @@ export function calendar(content, ctx, focus) {
     Array.from({length:blanks}, (_, i) => inactiveDay(previousDays - blanks + i + 1)).join('') +
     Array.from({length:days}, (_, i) => {
       const key = selected.slice(0,8) + String(i + 1).padStart(2,'0');
-      const count = byDay.get(key)?.length ?? 0;
+      const dayEvents = byDay.get(key) ?? [];
+      const count = dayEvents.length;
+      const dots = (dayEvents.some(event => !event.cancelled && event.type === 'Ensayo') ? '<i class="dot-rehearsal"></i>' : '') +
+        (dayEvents.some(event => !event.cancelled && event.type !== 'Ensayo') ? '<i class="dot-event"></i>' : '') +
+        (dayEvents.some(event => event.cancelled) ? '<i class="dot-cancelled"></i>' : '');
       return '<button type="button" class="day" data-day="' + key + '" aria-label="' + dateOnly(key) +
         (count ? ', ' + count + ' evento' + (count === 1 ? '' : 's') : '') + '" aria-pressed="' + (key === selected) + '"' +
         (key === today() ? ' aria-current="date"' : '') + '><span>' + (i + 1) + '</span>' +
-        (count ? '<i aria-hidden="true"></i>' : '') + '</button>';
-    }).join('') + Array.from({length:trailing}, (_, i) => inactiveDay(i + 1)).join('') + '</div>' : '';
+        (dots ? '<span class="calendar-dots" aria-hidden="true">' + dots + '</span>' : '') + '</button>';
+    }).join('') + Array.from({length:trailing}, (_, i) => inactiveDay(i + 1)).join('') + '</div>' +
+    '<div class="calendar-legend"><span><i class="dot-rehearsal"></i>Ensayo</span><span><i class="dot-event"></i>Acto o concierto</span>' +
+    (visible.some(event => event.cancelled) ? '<span><i class="dot-cancelled"></i>Cancelado</span>' : '') + '</div>' : '';
   const upcoming = visible.filter(event => Date.parse(event.starts) > Date.now() && !event.cancelled);
   const past = visible.filter(event => !upcoming.includes(event)).reverse();
   const cards = list => list.map(event => eventCard(event, state.pending[event.id])).join('');
@@ -48,7 +54,7 @@ export function calendar(content, ctx, focus) {
       empty('No hay eventos este mes.'));
   content.innerHTML = '<div class="calendar-view">' + header('Calendario','',
     manager(state) ? '<a class="button primary" href="#/calendario/nuevo">' + icon('plus') + 'Nuevo evento</a>' : '') +
-    segment('Vista de calendario',[['month','Mes','calendario'],['list','Lista','list']],mode) +
+    segment('Vista de calendario',[['month','Mes','grid'],['list','Lista','list']],mode) +
     '<div class="calendar-layout' + (mode === 'list' ? ' calendar-list' : '') + '"><section class="card calendar-card">' +
     '<div class="calendar-head"><div class="month-controls"><button type="button" id="previous" aria-label="Mes anterior">' + icon('left') +
     '</button><h2 aria-live="polite">' + monthLabel[0].toUpperCase() + monthLabel.slice(1) +
@@ -120,13 +126,16 @@ export async function eventPage(content, ctx, id, action) {
     (event.cancelled ? '<div class="callout"><strong>Evento cancelado</strong><p>La convocatoria se conserva en el historial.</p></div>' : '') +
     '<div class="info-line"><span class="tile">' + icon('calendario') + '</span><div><strong>' + fullDate(event.starts) +
     '</strong><p class="muted">' + timeRange(event) + ' · Hora de Madrid · Fin aproximado</p></div></div>' +
-    (places || event.meeting ? '<div class="info-line"><span class="tile">' + icon('map') + '</span><div><strong>' + esc(places || event.meeting) + '</strong>' +
-      (event.meeting && places ? '<p class="muted">Punto de encuentro · ' + esc(event.meeting) + '</p>' : '') +
-      '</div></div>' : '') +
+    (event.meeting ? '<div class="info-line"><span class="tile">' + icon('clock') + '</span><div><strong>Punto de encuentro</strong>' +
+      '<p class="muted">' + esc(event.meeting) + '</p></div></div>' : '') +
     (event.description ? '<p class="event-description pre">' + esc(event.description) + '</p>' : '') +
+    (places ? '<div class="info-line"><span class="tile">' + icon('map') + '</span><div><strong>' +
+      esc(event.location || event.town) + '</strong>' +
+      (event.location && event.town ? '<p class="muted">' + esc(event.town) + '</p>' : '') + '</div></div>' : '') +
     (map ? '<a class="button quiet event-action" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/search/?api=1&amp;query=' +
-      encodeURIComponent(map) + '">' + icon('map') + 'Abrir en mapas</a>' : '') +
-    '</section><div class="stack event-side"><section class="card stack event-attendance"><div class="event-labels"><h2>' + icon('check') + 'Mi asistencia</h2>' +
+      encodeURIComponent(map) + '">' + icon('compass') + 'Abrir en mapas</a>' : '') +
+    '</section><div class="stack event-side"><section class="card stack event-attendance"><div class="event-labels"><h2>' +
+    icon('clipboard') + 'Mi asistencia</h2>' +
     attendanceBadge(event.intention) + '</div>' +
     (pending ? '<div class="callout queue"><strong>' + (pending.error ? 'Cambio sin enviar' : 'Pendiente de envío') +
       '</strong><p>Tu selección local: ' + intention[pending.value] + '</p>' +
@@ -135,13 +144,14 @@ export async function eventPage(content, ctx, id, action) {
     (event.reason ? '<p class="muted pre">Motivo privado: ' + esc(event.reason) + '</p>' : '') +
     '<p class="event-description muted">' + icon('clock') + (open ? 'Puedes responder hasta el inicio del evento.' :
       'Las respuestas están cerradas para este evento.') + '</p>' +
-    (open ? '<a class="button primary event-action" href="' + href + '/responder">Responder asistencia' + icon('arrow') + '</a>' : '') +
+    (open ? '<a class="button primary event-action" href="' + href + '/responder"><span>' + icon('clipboard') +
+      'Responder asistencia</span>' + icon('arrow') + '</a>' : '') +
     '</section>' + (detail ? '<div class="row-list event-links">' +
     row('Asistentes',responses,href + '/asistentes','users') +
     (manager(state) && !event.cancelled && !open ? row('Pasar lista','Registrar presencia real',href + '/pasar-lista','check') : '') +
     (manager(state) ? row('Corregir intención','Revisar respuestas y motivos',href + '/corregir','perfil') +
       row('Formación','Editar posiciones y plantillas',href + '/formacion','grid') : '') +
-    '</div>' : '') + '</div>' + (detail ? '<section class="card stack event-documents"><h2>' + icon('file') + 'Información y documentos</h2>' +
+    '</div>' : '') + '</div>' + (detail ? '<section class="card stack event-documents"><h2>' + icon('folder') + 'Documentación y calendario</h2>' +
     (detail.attachments.length ? '<div class="row-list">' + detail.attachments.map(file => row(file.name,'PDF','/api/files/' + file.id,'file')).join('') + '</div>' :
       '<p class="muted">Sin documentos adjuntos.</p>') +
     '<a class="button quiet event-action" href="/api/events/' + id + '/calendar">' + icon('calendario') + 'Exportar al calendario (.ics)</a>' +
@@ -161,7 +171,7 @@ function respond(content, ctx, event, open) {
       Object.entries(intention).map(([value,label]) => '<label class="choice"><input type="radio" name="value" value="' + value + '"' +
         (value === selected ? ' checked' : '') + '><span>' + label + '</span></label>').join('') +
       '</fieldset><div id="reason">' + area('reason','Motivo de ausencia (opcional)','maxlength="500"',pending?.reason ?? event.reason) +
-      '<p class="muted">Tu motivo solo es visible para ti y para Administración y Dirección.</p></div>' + errorRegion +
+      '<p class="muted">Solo tú y Dirección podéis ver el motivo.</p></div>' + errorRegion +
       button('Guardar respuesta') + '</form>');
   const form = content.querySelector('form');
   if (!form) return;

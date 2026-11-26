@@ -3,13 +3,28 @@ import { bindGoogle, googleButton, googleRegistration } from './google.js';
 import { optionLists } from './part-options.js';
 
 export const mailRoutes = ['recuperar','restablecer','verificar'];
-const emailField = () => field('email','Correo electrónico','type="email" required autocomplete="email" maxlength="254"');
 const newPassword = 'type="password" required minlength="12" maxlength="128" autocomplete="new-password"';
+const emailField = () => authField('email','Correo electrónico','mail',
+  'type="email" required autocomplete="email" maxlength="254" placeholder="tu@correo.es"');
+
+function authField(name, label, glyph, attributes, action = '') {
+  return '<div class="auth-field"><label for="auth-' + name + '">' + label + '</label><div class="auth-input">' +
+    icon(glyph) + '<input id="auth-' + name + '" name="' + name + '" ' + attributes + '>' + action + '</div></div>';
+}
 
 function accessFrame(body) {
-  return '<main class="access"><div class="access-brand"><img src="./public/escudo.png" alt="" width="210" height="210">' +
-    '<div><span class="brand">Calvario</span><p>Banda de Cornetas y Tambores<br>Santísimo Cristo del Calvario</p></div></div><div class="access-body">' +
-    '<section class="access-panel">' + body + '</section></div></main>';
+  return '<main class="access"><div class="access-brand">' +
+    '<div class="access-emblem"><img src="./public/escudo.png" alt="Escudo de la banda" width="64" height="64"></div>' +
+    '<div class="access-identity"><p class="access-kicker">Banda de Cornetas y Tambores</p>' +
+    '<p class="access-wordmark">Calvario</p><p class="access-fullname">Santísimo Cristo del Calvario</p></div></div>' +
+    '<div class="access-body"><section class="access-panel">' + body + '</section></div></main>';
+}
+
+function showAccess(shell, body) {
+  shell.innerHTML = accessFrame(body);
+  const heading = shell.querySelector('h1');
+  document.title = heading.textContent + ' · Calvario';
+  heading.focus({ preventScroll:true });
 }
 
 function accountStatus(member) {
@@ -20,7 +35,8 @@ function accountStatus(member) {
   const status = verify ? 'Abre el enlace enviado a ' + member.email + ' para que la banda pueda revisar tu solicitud.' :
     pending ? 'Tu solicitud está pendiente de revisión por la banda.' : rejected ? 'La banda no ha aprobado esta solicitud.' :
       'Tu cuenta no tiene una membresía activa.';
-  return '<div class="account-stage">' + pill(verify ? 'Verificación' : pending ? 'En revisión' : 'Estado de la cuenta',pending ? 'waiting' : 'accent') +
+  return '<div class="account-stage"><span class="tile">' + icon(verify ? 'mail' : pending ? 'clock' : 'shield') + '</span>' +
+    pill(verify ? 'Verificación' : pending ? 'En revisión' : 'Estado de la cuenta',pending ? 'waiting' : 'accent') +
     '</div>' + header(title, member.name) + '<p class="muted">' + esc(status) + '</p>' +
     (verify ? '<form class="stack" id="resend-link">' + errorRegion + button('Reenviar enlace','secondary') + '</form>' : '') +
     '<div class="actions">' + (pending ? button('Comprobar estado','primary','id="retry"') : '') +
@@ -30,20 +46,24 @@ function accountStatus(member) {
 function accessForm(requesting, offline, mailEnabled, values) {
   const password = requesting ? newPassword : 'type="password" required maxlength="128" autocomplete="current-password"';
   const tab = (title, href, glyph, active) => '<a href="' + href + '"' + (active ? ' aria-current="page"' : '') + '>' + icon(glyph) + title + '</a>';
-  return (mailEnabled ? '<nav class="access-tabs" aria-label="Entrada a Calvario">' + tab('Acceso','#/inicio','perfil',!requesting) +
-    tab('Solicitud','#/solicitud','plus',requesting) + '</nav>' : '') +
-    header(requesting ? 'Únete a la banda' : 'Acceso a la banda', requesting ? 'Tu solicitud requiere aprobación.' : '') +
+  const reveal = '<button type="button" class="auth-reveal" id="show-password" aria-label="Mostrar contraseña" aria-pressed="false">' +
+    icon('eye') + '</button>';
+  return (mailEnabled ? '<nav class="access-tabs" aria-label="Entrada a Calvario">' + tab('Acceso','#/inicio','lock',!requesting) +
+    tab('Solicitar acceso','#/solicitud','plus',requesting) + '</nav>' : '') +
+    header(requesting ? 'Únete a la banda' : 'Inicia sesión',
+      requesting ? 'Dirección revisará tu solicitud después de que confirmes el correo.' : 'Entra con el correo de tu cuenta.',
+      '', 'Portal de componentes') +
     (offline ? '<p class="callout">Necesitas conexión para entrar o solicitar acceso.</p>' : '') +
     '<form class="stack" id="access-form">' +
-    (requesting ? field('name','Nombre y apellidos','required autocomplete="name" maxlength="120"') : '') +
-    emailField() + '<div class="password-field">' + field('password','Contraseña',password) +
-    '<button type="button" class="text-link" id="show-password" aria-label="Mostrar contraseña" aria-pressed="false">' + icon('eye') + '</button></div>' +
+    (requesting ? authField('name','Nombre y apellidos','perfil','required autocomplete="name" maxlength="120"') : '') +
+    emailField() + authField('password','Contraseña','lock',password,reveal) +
     (requesting ? '<p class="muted">Usa una contraseña de al menos 12 caracteres.</p><div class="field-grid">' +
       field('instrument','Instrumento','required maxlength="80" list="instrument-options"') +
       field('voice','Voz','maxlength="80" list="voice-options"') + '</div>' + optionLists(values) :
-      (mailEnabled ? link('¿Has olvidado la contraseña?','#/recuperar') : '')) +
-    errorRegion + button(requesting ? 'Enviar solicitud' : 'Entrar') + '</form>' +
-    (mailEnabled ? '' : '<p class="muted access-help">Si necesitas una cuenta, solicita el alta a la dirección de la banda.</p>');
+      (mailEnabled ? '<div class="auth-recovery">' + link('¿Has olvidado tu contraseña?','#/recuperar') + '</div>' : '')) +
+    errorRegion + '<button class="button primary access-submit">' + icon(requesting ? 'arrow' : 'login') +
+    (requesting ? 'Enviar solicitud' : 'Entrar') + '</button></form>' +
+    (mailEnabled ? '' : '<p class="muted access-help">' + icon('shield') + 'Solicita el alta a Dirección si todavía no tienes cuenta.</p>');
 }
 
 function mailForm(route) {
@@ -57,7 +77,8 @@ function mailForm(route) {
     title = 'Elige una contraseña nueva';
     prompt = 'Usa al menos 12 caracteres. Las sesiones anteriores se cerrarán.';
     submit = 'Cambiar contraseña';
-    content = field('password','Contraseña nueva',newPassword) + field('confirmation','Repetir contraseña',newPassword);
+    content = authField('password','Contraseña nueva','lock',newPassword) +
+      authField('confirmation','Repetir contraseña','lock',newPassword);
   } else {
     title = 'Confirma tu correo';
     prompt = 'Confirma que este correo pertenece a tu solicitud de acceso.';
@@ -72,20 +93,19 @@ export function access(shell, ctx, route, id) {
   const requesting = route === 'solicitud' && ctx.state.mailEnabled;
   const member = ctx.state.member;
   if (!member && ctx.state.pilotUnavailable) {
-    shell.innerHTML = accessFrame(header('Piloto de Calvario') +
+    showAccess(shell,header('Piloto de Calvario') +
       '<p class="muted" role="status">El servidor del piloto todavía no está disponible.</p>' +
       button('Reintentar','secondary','id="retry"'));
     shell.querySelector('#retry').addEventListener('click',ctx.bootstrap);
     return;
   }
   if (mailRoutes.includes(route)) {
-    shell.innerHTML = accessFrame(mailForm(route));
+    showAccess(shell,mailForm(route));
     bindForm(shell.querySelector('#mail-form'), async input => {
       if (route === 'recuperar') {
         await ctx.api('/account/forgot','POST',{ email:input.email });
-        shell.innerHTML = accessFrame(back('Acceso','#/inicio') + header('Revisa tu correo') +
+        showAccess(shell,back('Acceso','#/inicio') + header('Revisa tu correo') +
           '<p class="muted" role="status">Si la dirección corresponde a una cuenta que puede recuperarse, recibirás un enlace.</p>');
-        shell.querySelector('h1').focus();
         return;
       }
       if (!id || !/^[0-9A-Za-z_-]{43}$/.test(id)) throw new Error('El enlace es inválido o ha caducado.');
@@ -96,13 +116,12 @@ export function access(shell, ctx, route, id) {
       await ctx.bootstrap();
       ctx.toast(verify ? 'Correo confirmado. Ya se puede revisar tu solicitud.' : 'Contraseña cambiada.');
     });
-    shell.querySelector('h1').focus({ preventScroll:true });
     return;
   }
   const google = !member && !ctx.state.offline && ctx.state.google;
-  const federated = google ? '<form class="stack google-access" id="google-form">' + errorRegion +
+  const federated = google ? '<p class="auth-divider">O continúa con</p><form class="stack google-access" id="google-form">' + errorRegion +
     googleButton('Continuar con Google') + '</form>' : '';
-  shell.innerHTML = accessFrame(member && member.status !== 'active' ? accountStatus(member) :
+  showAccess(shell,member && member.status !== 'active' ? accountStatus(member) :
     accessForm(requesting,ctx.state.offline,ctx.state.mailEnabled,ctx.state.catalogValues) + federated);
   if (google) bindGoogle(shell.querySelector('#google-form'),google,async idToken => {
     try {
@@ -127,6 +146,7 @@ export function access(shell, ctx, route, id) {
     const visible = form.elements.password.type === 'password';
     form.elements.password.type = visible ? 'text' : 'password';
     reveal.setAttribute('aria-pressed',String(visible));
+    reveal.innerHTML = icon(visible ? 'eye-off' : 'eye');
   };
   if (form) bindForm(form,async input => {
     await ctx.signIn(requesting,input);
