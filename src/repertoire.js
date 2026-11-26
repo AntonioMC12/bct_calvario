@@ -25,15 +25,15 @@ export function repertoire(content, ctx, id, action) {
     '<a class="button primary" href="#/repertorio/archivo">' + icon('upload') + '<span>Cargar partituras</span></a>' +
     '<a class="button secondary" href="#/repertorio/validacion">' + icon('check-ring') + '<span>Validar partituras</span></a></div>' : '';
   const hasPublished = state.data.works.some(work => work.scores.some(file => file.approved && !file.archived));
-  const downloadTools = !state.offline && hasPublished ? actionLink('Descarga por lotes','#/repertorio/descarga','download') +
+  const downloadTools = !state.offline && hasPublished ?
     (!management ? '<button class="button primary" type="button" id="download-mine">' + icon('download') +
-    'Descargar mis partituras</button>' : '') : '';
+      'Descargar mis partituras</button>' : '') + actionLink('Descarga por lotes','#/repertorio/descarga','download') : '';
   const tools = uploadTools || downloadTools ? '<div class="catalog-actions">' + uploadTools +
     (downloadTools ? '<div class="actions">' + downloadTools + '</div>' : '') + '</div>' : '';
   content.innerHTML = header('Repertorio',management ? 'Partituras de la banda' : 'Partituras para tu instrumento y voz') + tools +
     '<div class="stack catalog-panel"><div class="card catalog-filters"><div class="search-field">' + icon('search') +
     '<label><span class="sr-only">Buscar por título, autoría o género</span><input type="search" name="query" autocomplete="off" ' +
-    'placeholder="Buscar por título, autoría o género" value="' + esc(query) + '"></label></div>' +
+    'placeholder="Buscar partituras" value="' + esc(query) + '"></label></div>' +
     '<label>Género<select name="genre"><option value="">Todos los géneros</option>' +
     options(Object.fromEntries(genres.map(value => [value,value])),genre) + '</select></label></div>' +
     (management ? segment('Partituras',[['mine','Mis partituras','repertorio'],['all','Todas','list']],scope) : '') +
