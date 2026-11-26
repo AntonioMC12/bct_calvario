@@ -8,6 +8,7 @@ El [estado y los pendientes de Calvario](estado-y-pendientes.md) recoge la cober
 - El acceso usa un panel fotográfico con el escudo de la banda y un formulario con etiquetas visibles. La portada es una ilustración fotográfica generada con ImageGen e integrada como JPEG local en `public/login-hero.jpg`. La misma composición acompaña la solicitud, la recuperación y los estados de la cuenta.
 - La navegación utiliza barra inferior en móvil y barra lateral en escritorio. Las animaciones de entrada y de interacción respetan `prefers-reduced-motion`. La foto se incluye en el paquete del piloto y en la caché `v13` de la PWA. El cambio no requiere migraciones.
 - Pasaron `npm run check` y las 29 pruebas de `npm test`. Se revisó en navegador la demo aislada en móvil y escritorio, en tema claro y oscuro, con sesiones de músico y Dirección.
+- El código de la entrega es `59fa4c5`. GitHub Pages publica `6a492ef` desde `gh-pages`. Se comprobó que la pantalla de acceso abre en la URL pública, que la portada y la caché `v13` coinciden con el paquete y que la API responde desde ese origen. [Despliegue de GitHub Pages](https://github.com/AntonioMC12/bct_calvario/actions/runs/45851380226)
 
 <details>
 <summary>Instrucción de ImageGen para la portada</summary>
