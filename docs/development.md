@@ -2,6 +2,11 @@
 
 El [estado y los pendientes de Calvario](estado-y-pendientes.md) recoge la cobertura actual y los requisitos añadidos el 26 de noviembre de 2026. Las entradas siguientes conservan el historial de cada entrega.
 
+## 2026-11-27 · Espaciado de Material
+
+- Se separan cabecera, solicitudes, filtros y resultados con un ritmo de 1,5 rem. Se elimina el margen duplicado del título de solicitudes. En móvil, Añadir material llena su fila y los filtros se apilan; en anchuras mayores los campos se alinean por la base.
+- Verificado en la demo a 512 y 320 px, con resultados vacíos; sin desbordamiento horizontal a 320 px. Pasaron check y las 32 pruebas generales. La caché PWA pasa a v27. Se publica el ajuste de interfaz en Pages sin cambios en la API ni el esquema; no se espera al despliegue.
+
 ## 2026-11-27 · Publicación de cambios pendientes
 
 - Se prepara la publicación conjunta del catálogo de instrumentos y voces, la edición de integrantes y las solicitudes de material. Los cambios de acceso con Google ya están configurados en los servicios del piloto.

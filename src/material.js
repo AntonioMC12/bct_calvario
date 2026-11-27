@@ -27,11 +27,11 @@ export async function materialPage(content, ctx, id) {
     content.innerHTML = back('Material',root) + empty('No se encuentra el material.');
     return;
   }
-  content.innerHTML = previous + header('Material','Inventario y préstamos',
+  content.innerHTML = previous + '<div class="material-view stack">' + header('Material','Inventario y préstamos',
     '<a class="button primary" href="' + root + '/nuevo">' + icon('plus') + 'Añadir material</a>') +
-    requestQueue(requests,items,loans) + '<div class="catalog-tools field-grid">' + field('query','Buscar por nombre, código o categoría','type="search"') +
+    requestQueue(requests,items,loans) + '<div class="catalog-tools field-grid material-filters">' + field('query','Buscar por nombre, código o categoría','type="search"') +
     '<label>Disponibilidad<select name="status">' + options({ current:'En inventario', available:'Disponibles',
-      loaned:'Prestados', archived:'Archivados', all:'Todos' }) + '</select></label></div><div class="stack" id="inventory"></div>';
+      loaned:'Prestados', archived:'Archivados', all:'Todos' }) + '</select></label></div><div class="stack" id="inventory"></div></div>';
   for (const form of content.querySelectorAll('[data-review-request]')) {
     form.addEventListener('submit',event => { form.dataset.choice = event.submitter?.dataset.choice; });
     bindForm(form,async () => {
