@@ -176,11 +176,11 @@ function scoreButton(label,glyph,style,attributes) {
 
 function scoreActions(file, state) {
   const saved = state.saved.has(file.id);
-  return (!state.offline || saved ? scoreButton('Ver','eye','quiet','data-view="' + file.id + '" aria-label="Ver partitura"') +
+  return '<div class="score-primary-actions" role="group" aria-label="Acciones de la partitura">' + (!state.offline || saved ? scoreButton('Ver','eye','quiet','data-view="' + file.id + '" aria-label="Ver partitura"') +
       scoreButton('Descargar','download','secondary','data-download="' + file.id + '" aria-label="Descargar partitura"') : '') +
     (!saved && !state.offline && file.approved && !file.archived ?
-      scoreButton('Sin conexión','download','secondary','data-save="' + file.id + '" aria-label="Guardar partitura sin conexión"') : '') +
-    (!file.approved && canManageScores(state) ?
+      scoreButton('Guardar','download','secondary','title="Guardar sin conexión" data-save="' + file.id + '" aria-label="Guardar partitura sin conexión"') : '') +
+    '</div>' + (!file.approved && canManageScores(state) ?
       button('Validar distribución','secondary','data-approve="' + file.id + '"') +
       button('Descartar PDF','quiet','data-discard="' + file.id + '"') : '') +
     (state.offline && !saved ? '<span class="muted">Necesitas conexión.</span>' : '');

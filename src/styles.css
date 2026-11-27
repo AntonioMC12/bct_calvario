@@ -709,7 +709,17 @@ dialog .actions { justify-content: flex-end; }
 .score-actions { gap: .4rem; }
 .score-actions .button { min-height: 42px; padding: .5rem .7rem; gap: .35rem; }
 .catalog-work .score-row { display: grid; grid-template-columns: auto minmax(0,1fr); gap: .5rem .65rem; padding-block: .7rem; }
-.catalog-work .score-row .score-actions { grid-column: 2; }
+.catalog-work .score-row .score-actions { grid-column: 1 / -1; width: 100%; }
+.score-primary-actions { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0,1fr); width: 100%;
+  overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--inset); }
+.score-primary-actions:empty { display: none; }
+.score-primary-actions .button { flex-direction: column; gap: .3rem; min-width: 0; min-height: 58px;
+  padding: .5rem .25rem; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: .78rem; line-height: 1.2; }
+.score-primary-actions .button + .button { border-left: 1px solid var(--line); }
+.score-primary-actions .button .icon { width: 18px; height: 18px; }
+.score-primary-actions .button[data-view] { background: var(--soft-red); color: var(--link); }
+.score-primary-actions .button:hover { background: var(--soft-red); color: var(--link); }
+.score-primary-actions .button:focus-visible { outline-offset: -3px; }
 .pdf-viewer { width: min(1100px,calc(100vw - 2rem)); height: calc(100dvh - 2rem); max-height: none; padding: 0; overflow: hidden; }
 .pdf-viewer[open] { display: flex; flex-direction: column; }
 .pdf-viewer-head { display: flex; justify-content: space-between; align-items: center; gap: .75rem; padding: .8rem 1rem; border-bottom: 1px solid var(--line); }
