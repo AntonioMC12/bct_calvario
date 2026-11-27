@@ -171,15 +171,15 @@ function scoreSize(file) {
 }
 
 function scoreButton(label,glyph,style,attributes) {
-  return button(label,style,attributes).replace('>','>' + icon(glyph));
+  return button(label,style,attributes).replace('>','>' + icon(glyph) + '<span class="score-action-label">').replace('</button>','</span></button>');
 }
 
 function scoreActions(file, state) {
   const saved = state.saved.has(file.id);
-  return '<div class="score-primary-actions" role="group" aria-label="Acciones de la partitura">' + (!state.offline || saved ? scoreButton('Ver','eye','quiet','data-view="' + file.id + '" aria-label="Ver partitura"') +
-      scoreButton('Descargar','download','secondary','data-download="' + file.id + '" aria-label="Descargar partitura"') : '') +
+  return '<div class="score-primary-actions" role="group" aria-label="Acciones de la partitura">' + (!state.offline || saved ? scoreButton('Ver','eye','quiet','data-view="' + file.id + '" aria-label="Ver partitura" title="Ver partitura"') +
+      scoreButton('Descargar','download','secondary','data-download="' + file.id + '" aria-label="Descargar partitura" title="Descargar PDF"') : '') +
     (!saved && !state.offline && file.approved && !file.archived ?
-      scoreButton('Guardar','download','secondary','title="Guardar sin conexión" data-save="' + file.id + '" aria-label="Guardar partitura sin conexión"') : '') +
+      scoreButton('Guardar','file','secondary','title="Guardar sin conexión" data-save="' + file.id + '" aria-label="Guardar partitura sin conexión"') : '') +
     '</div>' + (!file.approved && canManageScores(state) ?
       button('Validar distribución','secondary','data-approve="' + file.id + '"') +
       button('Descartar PDF','quiet','data-discard="' + file.id + '"') : '') +
@@ -188,7 +188,7 @@ function scoreActions(file, state) {
 
 function scoreRow(file, { state }) {
   return '<div class="score-row"><span class="tile">' + icon('file') + '</span><div class="row-copy"><strong>' +
-    instrument(file) + '</strong><span class="muted">' + scoreSize(file) + '</span><div>' +
+    instrument(file) + '</strong><div class="score-meta"><span class="muted">' + scoreSize(file) + '</span>' +
     scoreStatus(file,state) + '</div></div><div class="score-actions">' + scoreActions(file,state) + '</div></div>';
 }
 
