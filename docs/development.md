@@ -2,6 +2,14 @@
 
 El [estado y los pendientes de Calvario](estado-y-pendientes.md) recoge la cobertura actual y los requisitos añadidos el 26 de noviembre de 2026. Las entradas siguientes conservan el historial de cada entrega.
 
+## 2026-11-27 · Visor de partituras dentro de Repertorio
+
+- RF29–RF32 y RF37–RF40. Las acciones se compactan como Ver, Descargar y Sin conexión. Ver abre un diálogo de lectura en la misma página, con navegación entre páginas, zoom y ajuste de anchura; en móvil llena la pantalla. También se usa desde la obra, la validación y Descargas.
+- Se añade pdfjs-dist 5.4.624, fijado en el lockfile, para representar el PDF en canvas sin depender del visor nativo de cada móvil. El módulo, worker, fuentes, mapas y decodificadores se sirven desde el propio sitio; la compilación los copia desde node_modules junto con su licencia. La CSP permite compilar los decodificadores WebAssembly, sin habilitar evaluación de JavaScript. La caché PWA v28 incluye el visor, sus fuentes básicas y decodificadores para leer las copias guardadas sin conexión.
+- Se mantienen la descarga autenticada y el control de cuenta sobre las copias locales. El visor se destruye al cerrar, navegar o limpiar los datos privados; se libera su worker y se limita el tamaño del canvas. Los documentos visualizados no se guardan automáticamente.
+- Verificación: check y 32 pruebas generales, incluido el empaquetado del visor en Pages. En la demo se abrió un PDF ficticio de dos páginas, se probó el cambio de página, zoom, cierre y regreso a Repertorio y se revisó la disposición móvil a 390 px. Se guardó el PDF y, tras detener el servidor y recargar, se comprobó su lectura dentro del visor sin conexión.
+- Se publica el cliente en Pages; no se cambia el esquema ni la API remota. No se espera a terminar el despliegue, según la preferencia del usuario.
+
 ## 2026-11-27 · Espaciado de Material
 
 - Se separan cabecera, solicitudes, filtros y resultados con un ritmo de 1,5 rem. Se elimina el margen duplicado del título de solicitudes. En móvil, Añadir material llena su fila y los filtros se apilan; en anchuras mayores los campos se alinean por la base.

@@ -22,18 +22,18 @@ const functionDir = join(functionsDir,'calvario-api');
 const shared = join(functionsDir,'_shared');
 await Promise.all([
   mkdir(join(siteDir,'src'),{ recursive:true }),
-  mkdir(join(siteDir,'public'),{ recursive:true }),
+  mkdir(join(siteDir,'public/pdfjs'),{ recursive:true }),
   mkdir(functionDir,{ recursive:true }),
   mkdir(join(shared,'server'),{ recursive:true }),
   mkdir(join(shared,'src'),{ recursive:true }),
 ]);
 const src = ['access.js','connection.js','events.js','google.js','main.js','management.js','material.js','part-options.js','parts.js','push.js',
-  'repertoire.js','report.js','roles.js','storage.js','styles.css','theme.js','time.js','ui.js'];
+  'repertoire.js','pdf-viewer.js','report.js','roles.js','storage.js','styles.css','theme.js','time.js','ui.js'];
 const assets = ['escudo.png','escudo_calvario_vector.svg','icon-192.png','icon-512.png','google-g.png','login-hero.jpg','inter.woff2','cinzel.woff2',
   'plus-jakarta-sans.woff2','inter-LICENSE.txt','cinzel-LICENSE.txt','plus-jakarta-sans-LICENSE.txt'];
 const domain = ['account-mail','api','catalog-values','events','formations','google','http','material','members','music','push','schema-version','security','store'];
 const html = await readFile('index.html','utf8');
-const csp = "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; " +
+const csp = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://www.gstatic.com https://apis.google.com; " +
   "style-src 'self'; img-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; " +
   "frame-src https://www.google.com/maps https://*.firebaseapp.com https://apis.google.com https://accounts.google.com; " +
   "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseapp.com " + edge.origin;
@@ -49,6 +49,12 @@ const migration = sql => 'BEGIN;\nSELECT pg_advisory_xact_lock(741697124518);\n'
 
 await Promise.all([
   ...src.map(file => cp(join('src',file),join(siteDir,'src',file))),
+  cp('node_modules/pdfjs-dist/build/pdf.min.mjs',join(siteDir,'public/pdfjs/pdf.min.mjs')),
+  cp('node_modules/pdfjs-dist/build/pdf.worker.min.mjs',join(siteDir,'public/pdfjs/pdf.worker.min.mjs')),
+  cp('node_modules/pdfjs-dist/standard_fonts',join(siteDir,'public/pdfjs/standard_fonts'),{ recursive:true }),
+  cp('node_modules/pdfjs-dist/cmaps',join(siteDir,'public/pdfjs/cmaps'),{ recursive:true }),
+  cp('node_modules/pdfjs-dist/wasm',join(siteDir,'public/pdfjs/wasm'),{ recursive:true }),
+  cp('node_modules/pdfjs-dist/LICENSE',join(siteDir,'public/pdfjs/LICENSE')),
   ...assets.map(file => cp(join('public',file),join(siteDir,'public',file))),
   ...['manifest.webmanifest','sw.js'].map(file => cp(file,join(siteDir,file))),
   ...domain.map(file => cp(join('server',file + '.mjs'),join(shared,'server',file + '.mjs'))),

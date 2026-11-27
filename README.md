@@ -66,7 +66,7 @@ En **Gestión → Material**, Dirección puede registrar cada pieza con su códi
 
 ## Partituras
 
-Los músicos pueden abrir y descargar los PDF vigentes de su instrumento y voz. En **Repertorio → Descargar mis partituras** se descarga todo su repertorio autorizado en un ZIP. **Descarga por lotes** permite seleccionar PDF concretos. Dirección tiene acceso al catálogo completo y puede cargar hasta 20 PDF por lote, con un máximo de 5 MiB por archivo.
+Los músicos pueden ver y descargar los PDF vigentes de su instrumento y voz. **Ver** abre un visor dentro de la web, con cambio de página, zoom y ajuste de anchura; las copias guardadas se pueden leer también sin conexión. **Descargar** exporta el PDF y **Sin conexión** lo guarda en este dispositivo. En **Repertorio → Descargar mis partituras** se descarga todo su repertorio autorizado en un ZIP. **Descarga por lotes** permite seleccionar PDF concretos. Dirección tiene acceso al catálogo completo y puede cargar hasta 20 PDF por lote, con un máximo de 5 MiB por archivo.
 
 Para reemplazar un PDF, abre la obra y elige **Subir nueva versión**. Al validarla, el PDF anterior pasa al historial de la obra y la versión nueva queda disponible para su instrumento y voz.
 

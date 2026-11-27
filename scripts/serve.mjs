@@ -9,6 +9,7 @@ import { configureGoogle } from '../server/google.mjs';
 import { configurePush, createPushWorker } from '../server/push.mjs';
 
 const types = {
+  mjs:'text/javascript; charset=utf-8', pfb:'application/octet-stream', ttf:'font/ttf', bcmap:'application/octet-stream', wasm:'application/wasm',
   html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8',
   css: 'text/css; charset=utf-8', png: 'image/png', jpg: 'image/jpeg', woff2: 'font/woff2', svg: 'image/svg+xml',
   webmanifest: 'application/manifest+json',
@@ -32,10 +33,10 @@ export function createAppServer(database, { sendMail = createMail(), accountCloc
   const external = configuredOrigin(publicOrigin);
   const authDomain = google?.config.authDomain;
   const googleSources = authDomain
-    ? "script-src 'self' https://www.gstatic.com https://apis.google.com; " +
+    ? "script-src 'self' 'wasm-unsafe-eval' https://www.gstatic.com https://apis.google.com; " +
       "frame-src https://www.google.com/maps https://" + authDomain + " https://apis.google.com https://accounts.google.com; " +
       "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://" + authDomain + "; "
-    : "script-src 'self'; frame-src https://www.google.com/maps; ";
+    : "script-src 'self' 'wasm-unsafe-eval'; frame-src https://www.google.com/maps; ";
   return createServer(async (request, response) => {
     const host = request.headers.host?.toLowerCase() ?? '';
     if (external ? host !== external.host : !/^(localhost|127\.0\.0\.1)(?::\d+)?$/.test(host)) {
@@ -59,10 +60,11 @@ export function createAppServer(database, { sendMail = createMail(), accountCloc
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       return response.writeHead(405, { Allow: 'GET, HEAD' }).end();
     }
-    if (pathname !== '/' && !assetRoute.test(pathname)) return response.writeHead(404).end();
+    const pdfAsset = /^\/public\/pdfjs\/(?:pdf(?:\.worker)?\.min\.mjs|standard_fonts\/[A-Za-z0-9_-]+\.(?:pfb|ttf)|cmaps\/[A-Za-z0-9_-]+\.bcmap|wasm\/(?:[a-z0-9_]+\.wasm|openjpeg_nowasm_fallback\.js))$/.test(pathname);
+    if (pathname !== '/' && !pdfAsset && !assetRoute.test(pathname)) return response.writeHead(404).end();
     const path = pathname === '/' ? '/index.html' : pathname;
     try {
-      const content = await readFile(new URL('..' + path, import.meta.url));
+      const content = await readFile(new URL(pdfAsset ? '../node_modules/pdfjs-dist/' + path.slice('/public/pdfjs/'.length).replace(/^pdf/, 'build/pdf') : '..' + path, import.meta.url));
       return response.writeHead(200, {
         'Content-Type': types[path.split('.').at(-1)],
         'Cache-Control': 'no-cache',

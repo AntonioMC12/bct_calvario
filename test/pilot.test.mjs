@@ -27,6 +27,10 @@ test('Pages solo publica recursos estáticos y la API Edge conserva la autorizac
       ['.nojekyll','index.html','manifest.webmanifest','public','src','sw.js']);
     assert.match(await readFile(join(target,'pages','index.html'),'utf8'),/src="\.\/src\/main\.js"/);
     assert.match(await readFile(join(target,'pages','index.html'),'utf8'),/connect-src [^"]+vsmmpccqaywetuiyhevm\.supabase\.co/);
+    for (const resource of ['pdf.min.mjs','pdf.worker.min.mjs','LICENSE','standard_fonts/LiberationSans-Regular.ttf','wasm/openjpeg.wasm']) {
+      assert.ok((await readFile(join(target,'pages','public','pdfjs',resource))).length > 0);
+    }
+    assert.ok((await readFile(join(target,'pages','src','pdf-viewer.js'),'utf8')).includes('showPdfViewer'));
     const { createEdgeHandler } = await import(pathToFileURL(join(target,'edge','supabase','functions','calvario-api','handler.mjs')));
     const mailbox = [];
     const handler = createEdgeHandler(db,{ site,sendMail: async message => mailbox.push(message),background:action => action() });

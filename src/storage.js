@@ -106,7 +106,7 @@ export async function removePdf(account, file) {
   if (globalThis.caches) await (await caches.open(pdfCache(account))).delete(fileUrl(file));
 }
 
-async function localPdfUrl(account, file) {
+async function localPdfBlob(account, file) {
   const local = getLocal();
   if (local.account !== account) throw new Error('La cuenta ha cambiado.');
   if (!local.dashboard?.works.some(work => work.scores.some(item => item.id === file.id))) {
@@ -114,32 +114,30 @@ async function localPdfUrl(account, file) {
   }
   const response = await (await caches.open(pdfCache(account))).match(fileUrl(file));
   if (!response) throw new Error('La partitura no está guardada.');
-  const url = URL.createObjectURL(await response.blob());
+  const blob = await response.blob();
   if (getLocal().account !== account) {
-    URL.revokeObjectURL(url);
     throw new Error('La cuenta ha cambiado.');
   }
-  return url;
+  return blob;
 }
 
-export async function openSavedPdf(account, file) {
-  const viewer = window.open('about:blank', '_blank');
-  if (!viewer) throw new Error('Permite abrir una nueva pestaña o elige Exportar copia guardada.');
-  viewer.opener = null;
-  let url;
-  try {
-    url = await localPdfUrl(account,file);
-    viewer.location.replace(url);
-    setTimeout(() => URL.revokeObjectURL(url), 300000);
-  } catch (error) {
-    if (url) URL.revokeObjectURL(url);
-    viewer.close();
+export async function scorePdf(account,file,saved = false) {
+  if (saved) return localPdfBlob(account,file);
+  const response = await backend('/files/' + file.id,{ headers:{ 'X-Calvario-Account':account }, signal:AbortSignal.timeout(20000) });
+  if (!response.ok || response.headers.get('content-type') !== 'application/pdf') {
+    const payload = await response.json().catch(() => ({}));
+    const error = new Error(payload.error || 'No se ha podido cargar la partitura.');
+    error.status = response.status;
+    error.code = payload.code;
     throw error;
   }
+  const blob = await response.blob();
+  if (getLocal().account !== account) throw new Error('La cuenta ha cambiado.');
+  return blob;
 }
 
-export async function downloadPdf(account, file) {
-  const url = await localPdfUrl(account,file);
+export async function downloadPdf(account, file, saved = true) {
+  const url = URL.createObjectURL(await scorePdf(account,file,saved));
   exportFile(url,file.name);
 }
 
@@ -164,11 +162,15 @@ function exportFile(url,name) {
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = name;
+  anchor.hidden = true;
+  document.body.append(anchor);
   anchor.click();
+  anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 export async function clearPrivate() {
+  globalThis.dispatchEvent?.(new Event('calvario:private-cleared'));
   for (const key of Object.keys(localStorage)) {
     if (key.startsWith(prefix)) localStorage.removeItem(key);
   }
