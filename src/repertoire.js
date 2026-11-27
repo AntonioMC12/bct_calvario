@@ -1,6 +1,7 @@
 import { actionLink, back, bindForm, button, empty, errorRegion, esc, field, header, icon, instrument, matchesScore, normalize,
   options, pill, row, sectionTitle, segment } from './ui.js';
-import { downloadPdf, downloadScores, openSavedPdf, removePdf, savePdf } from './storage.js';
+import { downloadPdf, downloadScores, removePdf, savePdf } from './storage.js';
+import { showPdfViewer } from './pdf-viewer.js';
 import { pdfContent } from './management.js';
 import { canManage } from './roles.js';
 import { optionLists } from './part-options.js';
@@ -169,13 +170,16 @@ function scoreSize(file) {
   return 'PDF · ' + size + ' KB';
 }
 
+function scoreButton(label,glyph,style,attributes) {
+  return button(label,style,attributes).replace('>','>' + icon(glyph));
+}
+
 function scoreActions(file, state) {
   const saved = state.saved.has(file.id);
-  return (!state.offline ? '<a class="button quiet" href="/api/files/' + file.id + '" target="_blank" rel="noopener">' +
-      icon('file') + 'Abrir PDF</a>' : '') +
-    (saved ? button('Abrir PDF guardado','secondary','data-open="' + file.id + '"') +
-      button('Exportar copia guardada','secondary','data-download="' + file.id + '"') :
-      (!state.offline && file.approved && !file.archived ? button('Guardar sin conexión','secondary','data-save="' + file.id + '"') : '')) +
+  return (!state.offline || saved ? scoreButton('Ver','eye','quiet','data-view="' + file.id + '" aria-label="Ver partitura"') +
+      scoreButton('Descargar','download','secondary','data-download="' + file.id + '" aria-label="Descargar partitura"') : '') +
+    (!saved && !state.offline && file.approved && !file.archived ?
+      scoreButton('Sin conexión','download','secondary','data-save="' + file.id + '" aria-label="Guardar partitura sin conexión"') : '') +
     (!file.approved && canManageScores(state) ?
       button('Validar distribución','secondary','data-approve="' + file.id + '"') +
       button('Descartar PDF','quiet','data-discard="' + file.id + '"') : '') +
@@ -260,11 +264,11 @@ function replacement(content,ctx,id) {
 }
 
 function bindScores(content, ctx, files, draw) {
-  for (const control of content.querySelectorAll('[data-save], [data-open], [data-download], [data-remove], [data-approve], [data-discard]')) {
+  for (const control of content.querySelectorAll('[data-save], [data-view], [data-open], [data-download], [data-remove], [data-approve], [data-discard]')) {
     control.addEventListener('click', async () => {
       control.disabled = true;
-      const { save, open, download, remove, approve, discard } = control.dataset;
-      const file = files.find(item => item.id === (save ?? open ?? download ?? remove ?? approve ?? discard));
+      const { save, view, open, download, remove, approve, discard } = control.dataset;
+      const file = files.find(item => item.id === (save ?? view ?? open ?? download ?? remove ?? approve ?? discard));
       const account = ctx.state.member.id;
       try {
         if (save) {
@@ -273,10 +277,10 @@ function bindScores(content, ctx, files, draw) {
           ctx.state.saved.add(file.id);
           ctx.toast('Partitura guardada en este dispositivo');
           draw();
-        } else if (open) {
-          await openSavedPdf(account,file);
+        } else if (view || open) {
+          showPdfViewer({ ...file,title:ctx.state.data.works.find(work => work.scores.some(score => score.id === file.id))?.title },ctx);
         } else if (download) {
-          await downloadPdf(account,file);
+          await downloadPdf(account,file,ctx.state.saved.has(file.id));
         } else if (remove) {
           await removePdf(account,file);
           ctx.state.saved.delete(file.id);
@@ -312,8 +316,8 @@ export function downloads(content,ctx) {
     (files.length ? '<div class="row-list">' + files.map(file => '<div class="score-row"><span class="tile">' + icon('file') +
       '</span><div class="row-copy"><strong>' + esc(file.title) + '</strong><span class="muted">' +
       [file.instrument,file.voice].filter(Boolean).map(esc).join(' · ') + '</span></div><div class="score-actions">' +
-      button('Abrir PDF guardado','secondary','data-open="' + file.id + '"') +
-      button('Exportar copia guardada','secondary','data-download="' + file.id + '"') +
+      scoreButton('Ver','eye','quiet','data-open="' + file.id + '"') +
+      scoreButton('Descargar','download','secondary','data-download="' + file.id + '"') +
       button('Retirar descarga','secondary','data-remove="' + file.id + '"') + '</div></div>').join('') + '</div>' :
       empty('Todavía no tienes partituras guardadas.')) +
     '<p class="muted">Retirar una descarga libera espacio en Calvario. Las copias exportadas quedan en tu dispositivo.</p>';

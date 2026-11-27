@@ -704,3 +704,29 @@ dialog .actions { justify-content: flex-end; }
   --ring: #ffb4a9;
   --shadow: 0 5px 20px #0002;
 }
+
+/* Acciones compactas y visor de partituras dentro de la aplicación. */
+.score-actions { gap: .4rem; }
+.score-actions .button { min-height: 42px; padding: .5rem .7rem; gap: .35rem; }
+.catalog-work .score-row { display: grid; grid-template-columns: auto minmax(0,1fr); gap: .5rem .65rem; padding-block: .7rem; }
+.catalog-work .score-row .score-actions { grid-column: 2; }
+.pdf-viewer { width: min(1100px,calc(100vw - 2rem)); height: calc(100dvh - 2rem); max-height: none; padding: 0; overflow: hidden; }
+.pdf-viewer[open] { display: flex; flex-direction: column; }
+.pdf-viewer-head { display: flex; justify-content: space-between; align-items: center; gap: .75rem; padding: .8rem 1rem; border-bottom: 1px solid var(--line); }
+.pdf-viewer-head > div { min-width: 0; overflow-wrap: anywhere; }
+.pdf-viewer-head h2 { font-size: 1rem; }
+.pdf-viewer-head .button { flex-shrink: 0; }
+.pdf-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .35rem; padding: .5rem; border-bottom: 1px solid var(--line); }
+.pdf-toolbar .button { min-height: 40px; padding: .4rem .6rem; }
+.pdf-toolbar [data-page] { min-width: 3.5rem; text-align: center; font-variant-numeric: tabular-nums; }
+.pdf-feedback { padding: .7rem 1rem; }
+.pdf-paper { flex: 1; min-height: 0; overflow: auto; padding: 12px; background: var(--inset); overscroll-behavior: contain; scrollbar-gutter: stable; }
+.pdf-paper canvas { display: block; margin-inline: auto; background: white; box-shadow: var(--shadow); }
+@media (max-width: 540px) {
+  .pdf-viewer { width: 100vw; height: 100dvh; max-width: none; margin: 0; border: 0; border-radius: 0; }
+  .pdf-viewer-head { padding: .65rem; }
+  .pdf-toolbar { gap: .25rem; }
+  .pdf-toolbar .button { min-width: 36px; }
+  .pdf-toolbar [data-download] span { display: none; }
+  .pdf-toolbar [data-download] { min-width: 40px; }
+}
