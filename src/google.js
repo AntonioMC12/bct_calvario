@@ -1,5 +1,5 @@
 import { bindForm, button, errorRegion, field, header } from './ui.js';
-import { optionLists } from './part-options.js';
+import { musicalFields, bindMusicalFields } from './part-options.js';
 
 const sdk = 'https://www.gstatic.com/firebasejs/13.4.0/';
 let client;
@@ -60,10 +60,10 @@ export function googleRegistration(container, ctx, idToken) {
   container.innerHTML = header('Solicitar acceso con Google','Indica cómo participas en la banda.') +
     '<form class="stack">' +
     field('name','Nombre y apellidos','required autocomplete="name" maxlength="120"') +
-    field('instrument','Instrumento','required maxlength="80" list="instrument-options"') +
-    field('voice','Voz','maxlength="80" list="voice-options"') + optionLists(ctx.state.catalogValues) +
+    musicalFields(ctx.state.catalogValues) +
     errorRegion + '<div class="actions">' + button('Enviar solicitud') +
     button('Volver al acceso','secondary','type="button" id="cancel-google"') + '</div></form>';
+  bindMusicalFields(container.querySelector('form'),ctx.state.catalogValues);
   container.querySelector('h1').focus();
   container.querySelector('#cancel-google').addEventListener('click',ctx.bootstrap);
   bindForm(container.querySelector('form'), async input => {
