@@ -2,6 +2,11 @@
 
 El [estado y los pendientes de Calvario](estado-y-pendientes.md) recoge la cobertura actual y los requisitos añadidos el 26 de noviembre de 2026. Las entradas siguientes conservan el historial de cada entrega.
 
+## 2026-11-27 · Partituras en filas compactas
+
+- RF29–RF32. En el catálogo, cada parte reúne los datos a la izquierda y las acciones de icono a la derecha en una única fila. Se elimina el icono decorativo de archivo, se agrupan tamaño y estado y se conservan nombres accesibles y ayudas para Ver, Descargar y Guardar sin conexión. Las acciones miden 40 px y no saltan debajo de los datos.
+- Verificado a 475 px (fila de 62 px de alto) y 320 px (texto adaptado, acciones de 42 px y sin desbordamiento). Pasaron check y las 32 pruebas generales. Caché PWA v30. Se lanza la publicación en Pages sin esperar a su finalización.
+
 ## 2026-11-27 · Barra uniforme de acciones de partitura
 
 - Ver, Descargar y Guardar forman una barra de columnas iguales bajo los datos de cada parte, con icono sobre el texto y separadores interiores. Ver conserva el énfasis de color. Guardar mantiene el nombre accesible y la ayuda «Guardar sin conexión». El foco de teclado se dibuja dentro de la barra.
