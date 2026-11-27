@@ -1,3 +1,4 @@
+import { validateMusicalSelection } from './catalog-values.mjs';
 import { randomUUID } from 'node:crypto';
 import { audit } from './events.mjs';
 import { choice, requireThat, text } from './http.mjs';
@@ -47,6 +48,11 @@ export async function saveMember(db, actor, input, id = null) {
   const voice = text(input.voice, 80, 'Voz');
 
   return transaction(db, async () => {
+    const previous = id ? await db.prepare("SELECT instrument,voice FROM members WHERE id = ? AND status = 'active' AND role = 'musician'").get(id) : null;
+    if (id) requireThat(previous,404,'No se encuentra un músico activo.');
+    if ((!previous || previous.instrument !== instrument || previous.voice !== voice) && (instrument || voice)) {
+      await validateMusicalSelection(db,instrument,voice);
+    }
     if (!id) {
       const memberId = randomUUID();
       await db.prepare(`

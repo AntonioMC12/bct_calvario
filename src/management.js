@@ -2,7 +2,7 @@ import { actionLink, area, back, bindForm, button, displayTime, empty, errorRegi
   normalize, options, otherIntention, pill, role, row, sectionTitle } from './ui.js';
 import { localMinute } from './time.js';
 import { canManage } from './roles.js';
-import { optionLists } from './part-options.js';
+import { musicalFields, bindMusicalFields } from './part-options.js';
 
 const eventTypes = ['Ensayo','Actuación','Reunión','Procesión','Certamen','Concierto'];
 const manager = state => !state.offline && canManage(state.member.role);
@@ -152,12 +152,11 @@ function memberEditor(content, ctx, member = null) {
     '<form id="member-details" class="card stack">' +
     (!member ? '<p class="muted">El miembro aparecerá al pasar lista. Puede añadirse sin correo ni cuenta.</p>' : '') +
     field('name','Nombre y apellidos','required maxlength="120"',member?.name) + '<div class="field-grid">' +
-    field('instrument','Instrumento (opcional)','maxlength="80" list="instrument-options"',member?.instrument) +
-    field('voice','Voz (opcional)','maxlength="80" list="voice-options"',member?.voice) + '</div>' +
-    optionLists(ctx.state.data.catalogValues) + errorRegion +
+    musicalFields(ctx.state.data.catalogValues,member) + '</div>' + errorRegion +
     '<div class="actions">' + button(member ? 'Guardar cambios' : 'Añadir miembro') + '</div></form>' +
     (member ? '<form id="member-deactivate" class="card stack">' + errorRegion + '<div class="actions">' +
       button('Dar de baja','secondary') + '</div></form>' : '');
+  bindMusicalFields(content.querySelector('#member-details'),ctx.state.data.catalogValues,member);
   bindForm(content.querySelector('#member-details'),async input => {
     await ctx.api(endpoint,member ? 'PUT' : 'POST',input);
     ctx.toast(member ? 'Ficha actualizada' : 'Miembro añadido');

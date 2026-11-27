@@ -75,6 +75,8 @@ test('importa SQLite con PDF, identidad e historial y deja fuera los accesos tem
     source.prepare("INSERT INTO works VALUES ('score','Obra','Autor','Marcha')").run();
     source.prepare(`INSERT INTO files(id,work_id,name,instrument,voice,content,digest,approved)
       VALUES ('file','score','partitura.pdf','Corneta','',?,?,1)`).run(score,digest(score));
+    source.prepare("INSERT INTO material_items(id,code,name,category,condition,notes) VALUES ('material','MAT-01','Tuba ficticia','Instrumentos','usable','')").run();
+    source.prepare("INSERT INTO material_requests(id,item_id,member_id,created_at) VALUES ('request','material','musician',?)").run(now);
     source.prepare("INSERT INTO google_identities VALUES ('subject','firebase-uid','musician')").run();
     source.prepare("INSERT INTO audit VALUES (200,'admin','access.active','musician',?)").run(now);
     source.prepare("INSERT INTO sessions VALUES ('old-session','admin',?)").run(Date.now()+3600000);
@@ -92,6 +94,8 @@ test('importa SQLite con PDF, identidad e historial y deja fuera los accesos tem
     assert.equal(counts.members,2);
     assert.equal(counts.files,1);
     assert.equal(counts.intentions,1);
+    assert.equal(counts.material_requests,1);
+    assert.equal((await db.prepare("SELECT status FROM material_requests WHERE id = 'request'").get()).status,'pending');
     assert.equal((await db.prepare("SELECT reviewed_by FROM members WHERE id = 'musician'").get()).reviewed_by,'admin');
     assert.equal((await db.prepare("SELECT firebase_uid FROM google_identities WHERE member_id = 'musician'").get()).firebase_uid,'firebase-uid');
     assert.equal(source.prepare('SELECT count(*) AS n FROM sessions').get().n,1);

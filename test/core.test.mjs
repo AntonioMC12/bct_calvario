@@ -482,6 +482,120 @@ test('Dirección configura las sugerencias del catálogo sin alterar las fichas 
   assert.equal((await musician('/session')).data.member.instrument,'Corneta');
 });
 
+test('las solicitudes eligen instrumento y su voz del catálogo de la banda', async () => {
+  const path = '/catalog-values';
+  const add = async input => { const result = await director(path,'POST',input); assert.equal(result.status,201); return result.data.id; };
+  const a = await add({ kind:'instrument',label:'Bombardino de prueba' });
+  const b = await add({ kind:'instrument',label:'Tuba de prueba' });
+  try {
+    assert.equal((await director(path,'POST',{ kind:'voice',label:'Voz 1' })).status,422);
+    assert.equal((await musician(path,'POST',{ kind:'voice',label:'Voz 1',instrument:'Bombardino de prueba' })).status,403);
+    await add({ kind:'voice',label:'Voz 1',instrument:'Bombardino de prueba' });
+    await add({ kind:'voice',label:'Voz 1',instrument:'Tuba de prueba' });
+    assert.equal((await director(path,'POST',{ kind:'voice',label:'VÓZ 1',instrument:'Tuba de prueba' })).status,409);
+    const roster = await director('/management/members','POST',{ name:'Músico de prueba',instrument:'Bombardino de prueba',voice:'Voz 1' });
+    assert.equal(roster.status,201);
+    const endpoint = '/management/members/' + roster.data.id;
+    const profile = { name:'Músico de prueba',instrument:'Tuba de prueba',voice:'Voz 1' };
+    assert.equal((await musician('/management')).status,403);
+    assert.equal((await musician(endpoint,'PUT',profile)).status,403);
+    assert.equal((await admin(endpoint,'PUT',profile)).status,200);
+    assert.equal((await director(endpoint,'PUT',{ ...profile,voice:'Ajena' })).status,422);
+    const saved = (await director('/management')).data.members.find(member => member.id === roster.data.id);
+    assert.equal(saved.instrument,'Tuba de prueba');
+    assert.equal(saved.voice,'Voz 1');
+    await director(endpoint + '/deactivate','POST',{});
+    const signup = (instrument,voice,email = randomUUID() + '@test.invalid') => client()('/request-access','POST',{
+      name:'Solicitud ficticia',email,password:secret,instrument,voice,
+    });
+    assert.equal((await signup('Ajeno','')).status,422);
+    assert.equal((await signup('Bombardino de prueba','')).status,422);
+    assert.equal((await signup('Bombardino de prueba','Voz ajena')).status,422);
+    const user = client();
+    assert.equal((await user('/request-access','POST',{
+      name:'Solicitud ficticia',email:randomUUID() + '@test.invalid',password:secret,instrument:'Bombardino de prueba',voice:'Voz 1',
+    })).status,201);
+    const pendingId = (await user('/session')).data.member.id;
+    assert.equal((await db.prepare('SELECT voice FROM members WHERE id = ?').get(pendingId)).voice,'Voz 1');
+    await director(path + '/' + b,'DELETE',{});
+    const c = await add({ kind:'instrument',label:'Percusión de prueba' });
+    try {
+      assert.equal((await signup('Percusión de prueba','Voz 1')).status,422);
+      assert.equal((await signup('Percusión de prueba','')).status,201);
+    } finally { await director(path + '/' + c,'DELETE',{}); }
+    assert.ok(!(await client()('/session')).data.catalogValues.some(value => value.instrument === 'Tuba de prueba'));
+  } finally {
+    await director(path + '/' + a,'DELETE',{});
+    await director(path + '/' + b,'DELETE',{});
+  }
+});
+
+test('los músicos solicitan material disponible y gestión aprueba préstamos sin duplicarlos', async () => {
+  const inventory = '/material';
+  const input = { name:'Bombardino ficticio',code:'SOL-01',category:'Instrumentos',condition:'usable',notes:'Nota interna ficticia' };
+  assert.equal((await musician(inventory,'POST',input)).status,403);
+  const created = await admin(inventory,'POST',input);
+  assert.equal(created.status,201);
+  const itemId = created.data.id;
+  const requests = '/material-requests';
+  const personal = '/my-material';
+  assert.equal((await client()(personal)).status,401);
+  assert.equal((await musician(inventory)).status,403);
+  let view = (await musician(personal)).data;
+  assert.ok(view.items.some(item => item.id === itemId));
+  assert.ok(view.items.every(item => !('notes' in item)));
+  const first = await musician(requests,'POST',{ itemId,memberId:ids.admin });
+  assert.equal(first.status,201);
+  assert.equal((await musician(requests,'POST',{ itemId })).status,409);
+  assert.equal((await admin(requests + '/' + first.data.id + '/cancel','POST',{})).status,404);
+  assert.equal((await musician(requests + '/' + first.data.id + '/approve','POST',{})).status,403);
+  assert.ok(!(await admin(personal)).data.requests.some(request => request.id === first.data.id));
+  assert.ok((await director(inventory)).data.requests.some(request => request.id === first.data.id && request.member_id === ids.musician));
+  assert.equal((await musician(requests + '/' + first.data.id + '/cancel','POST',{})).status,200);
+  assert.equal((await director(requests + '/' + first.data.id + '/approve','POST',{})).status,409);
+  const own = await musician(requests,'POST',{ itemId });
+  const competitor = await admin(requests,'POST',{ itemId });
+  assert.equal(own.status,201);
+  assert.equal(competitor.status,201);
+  const approval = requests + '/' + own.data.id + '/approve';
+  const results = await Promise.all([director(approval,'POST',{}),admin(approval,'POST',{})]);
+  assert.deepEqual(results.map(result => result.status).sort(),[200,409]);
+  assert.equal((await musician(requests + '/' + own.data.id + '/cancel','POST',{})).status,409);
+  view = (await musician(personal)).data;
+  assert.equal(view.requests.find(request => request.id === own.data.id).status,'approved');
+  assert.ok(!view.items.some(item => item.id === itemId));
+  assert.equal(view.loans.filter(loan => loan.item_id === itemId && !loan.returned_at).length,1);
+  assert.ok(!view.loans.some(loan => 'member_id' in loan || 'member_name' in loan));
+  assert.equal((await admin(personal)).data.requests.find(request => request.id === competitor.data.id).status,'rejected');
+  assert.equal((await musician(requests,'POST',{ itemId })).status,409);
+  const item = (await director(inventory)).data.items.find(item => item.id === itemId);
+  assert.equal((await admin(inventory + '/' + itemId + '/return','POST',{ version:item.version })).status,200);
+  assert.ok((await musician(personal)).data.items.some(item => item.id === itemId));
+  assert.ok((await musician(personal)).data.loans.find(loan => loan.item_id === itemId).returned_at);
+  const pending = await musician(requests,'POST',{ itemId });
+  assert.equal((await director(requests + '/' + pending.data.id + '/reject','POST',{})).status,200);
+  const additional = await admin(inventory,'POST',{ ...input,code:'SOL-03' });
+  const groupedFirst = await musician(requests,'POST',{ itemId });
+  const groupedSecond = await admin(requests,'POST',{ itemId });
+  const groupedThird = await admin(requests,'POST',{ itemId:additional.data.id });
+  assert.equal(groupedThird.status,201);
+  assert.equal((await director(requests + '/' + groupedFirst.data.id + '/approve','POST',{})).status,200);
+  assert.equal((await director(requests + '/' + groupedSecond.data.id + '/approve','POST',{})).status,200);
+  assert.equal((await admin(personal)).data.loans.find(loan => !loan.returned_at).item_id,additional.data.id);
+  const secondItem = { ...input,name:'Tuba ficticia',code:'SOL-02',condition:'repair' };
+  const repair = (await director(inventory,'POST',secondItem)).data.id;
+  assert.equal((await musician(requests,'POST',{ itemId:repair })).status,409);
+  assert.ok(!(await musician(personal)).data.items.some(item => item.id === repair));
+  assert.equal((await director(inventory + '/' + repair,'PUT',{ ...secondItem,condition:'usable',version:1 })).status,200);
+  const stale = await musician(requests,'POST',{ itemId:repair });
+  assert.equal(stale.status,201);
+  assert.equal((await director(inventory + '/' + repair + '/archive','POST',{ version:2 })).status,200);
+  assert.equal((await admin(requests + '/' + stale.data.id + '/approve','POST',{})).status,409);
+  assert.equal((await admin(requests + '/' + stale.data.id + '/reject','POST',{})).status,200);
+  assert.equal((await musician(requests,'POST',{ itemId:repair })).status,409);
+  assert.equal((await musician(requests,'POST',{ itemId:'inexistente' })).status,409);
+});
+
 test('edición de obras, PDF privado, duplicados, validación por Dirección y baja', async () => {
   work = (await admin('/works','POST',{ title:'Obra',authors:'Autor; Otra autora',genre:'Marcha' })).data;
   const update = { title:'Obra revisada',authors:'Autor; Otra autora',genre:'Marcha' };

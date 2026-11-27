@@ -1,6 +1,6 @@
 import { back, bindForm, button, errorRegion, esc, field, header, icon, link, pill } from './ui.js';
 import { bindGoogle, googleButton, googleRegistration } from './google.js';
-import { optionLists } from './part-options.js';
+import { musicalFields, bindMusicalFields } from './part-options.js';
 
 export const mailRoutes = ['recuperar','restablecer','verificar'];
 const newPassword = 'type="password" required minlength="12" maxlength="128" autocomplete="new-password"';
@@ -61,8 +61,7 @@ function accessForm(requesting, offline, mailEnabled, values) {
     (requesting ? authField('name','Nombre y apellidos','perfil','required autocomplete="name" maxlength="120"') : '') +
     emailField() + authField('password','Contraseña','lock',password,reveal,recovery) +
     (requesting ? '<p class="muted">Usa una contraseña de al menos 12 caracteres.</p><div class="field-grid">' +
-      field('instrument','Instrumento','required maxlength="80" list="instrument-options"') +
-      field('voice','Voz','maxlength="80" list="voice-options"') + '</div>' + optionLists(values) :
+      musicalFields(values) + '</div>' :
       '<label class="auth-remember"><input id="remember-email" type="checkbox"> Recordar mi correo en este dispositivo</label>') +
     errorRegion + '<button type="submit" class="button primary access-submit">' + icon(requesting ? 'arrow' : 'login') +
     (requesting ? 'Enviar solicitud' : 'Entrar') + '</button></form>';
@@ -159,6 +158,7 @@ export function access(shell, ctx, route, id) {
     ctx.toast('Revisa tu bandeja de entrada. El enlace puede tardar en llegar.');
   });
   const form = shell.querySelector('#access-form');
+  if (requesting) bindMusicalFields(form,ctx.state.catalogValues);
   const remember = form?.querySelector('#remember-email');
   if (remember) {
     try {

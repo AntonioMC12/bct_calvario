@@ -1,3 +1,4 @@
+import { validateMusicalSelection } from './catalog-values.mjs';
 import { randomUUID } from 'node:crypto';
 import { applicationDefault, cert, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -108,6 +109,7 @@ export async function authenticateWithGoogle(db, provider, request, input) {
     const name = text(input.name,120,'Nombre y apellidos',true);
     const instrument = text(input.instrument,80,'Instrumento',true);
     const voice = text(input.voice,80,'Voz');
+    await validateMusicalSelection(db,instrument,voice);
     const id = randomUUID();
     const timestamp = new Date().toISOString();
     await db.prepare(`

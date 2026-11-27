@@ -3,7 +3,7 @@ import { digest } from './security.mjs';
 
 const newTables = ['material_items','material_loans','catalog_values'];
 const tables = ['members','events','intentions','presence','notices','inbox','formations','templates',
-  'works','files','google_identities','audit',...newTables];
+  'works','files','google_identities','audit',...newTables,'material_requests'];
 const sessionTables = ['sessions','account_tokens','push_subscriptions','push_jobs'];
 
 function columns(statement) {
@@ -20,8 +20,8 @@ export async function importSqlite(destination,filename) {
   try {
     source.exec('BEGIN');
     const { user_version: version } = source.prepare('PRAGMA user_version').get();
-    if (![3,4,5,6].includes(version)) {
-      throw new Error('Usa una copia de SQLite con la versión de esquema 3, 4, 5 o 6.');
+    if (![3,4,5,6,7,8].includes(version)) {
+      throw new Error('Usa una copia de SQLite con la versión de esquema 3, 4, 5, 6, 7 u 8.');
     }
     if (source.prepare('PRAGMA foreign_key_check').get()) throw new Error('La copia SQLite contiene relaciones no válidas.');
     return await destination.transaction(async () => {
@@ -35,6 +35,7 @@ export async function importSqlite(destination,filename) {
       await destination.exec('SET CONSTRAINTS ALL DEFERRED');
       const counts = {};
       for (const table of tables) {
+        if (table === 'material_requests' && version < 8) continue;
         if (version < 5 && newTables.includes(table)) continue;
         const select = source.prepare('SELECT * FROM ' + table);
         const names = columns(select);

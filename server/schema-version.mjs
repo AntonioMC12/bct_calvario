@@ -1,1 +1,1 @@
-export const postgresSchemaVersion = 4;
+export const postgresSchemaVersion = 6;

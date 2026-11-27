@@ -2,6 +2,40 @@
 
 El [estado y los pendientes de Calvario](estado-y-pendientes.md) recoge la cobertura actual y los requisitos añadidos el 26 de noviembre de 2026. Las entradas siguientes conservan el historial de cada entrega.
 
+## 2026-11-27 · Publicación de cambios pendientes
+
+- Se prepara la publicación conjunta del catálogo de instrumentos y voces, la edición de integrantes y las solicitudes de material. Los cambios de acceso con Google ya están configurados en los servicios del piloto.
+- La base remota se actualiza desde el esquema 4 al 6 con las migraciones aditivas de instrumentación y solicitudes de material. El paquete de Pages y Edge se genera desde la misma copia de código. Verificación previa: check, 32 pruebas generales, 28 pruebas PostgreSQL local y revisión de los flujos en navegador.
+- Se lanza la publicación de Pages y la actualización de calvario-api. Por petición del usuario, no se espera a la finalización del despliegue; la comprobación posterior de la versión publicada queda pendiente.
+
+## 2026-11-27 · Acceso con Google activado en el piloto
+
+- RF01–RF04, RF41 y CP01. Se habilita Google en Firebase, se registra la app web y se autoriza el dominio de GitHub Pages del piloto. Supabase conserva los identificadores públicos y la credencial Admin en secretos de Edge Functions; no se añaden credenciales al repositorio.
+- La API publicada devuelve la configuración de Google y el botón de acceso carga correctamente. Se comprobó el selector de cuenta, la autenticación real y la validación por el servidor hasta el formulario de solicitud de una identidad nueva. No se envió ninguna solicitud ni se cambió su rol. Las cuentas existentes siguen requiriendo vincular Google desde Perfil tras entrar con contraseña; las altas nuevas requieren aprobación de la banda.
+- Esta operación configura el acceso en la versión ya publicada. Los cambios locales de instrumentación y solicitudes de material siguen pendientes de publicación.
+
+## 2026-11-27 · Solicitudes de material de la banda
+
+- Ampliación de Material solicitada por el usuario, con los permisos de RF05–RF08 y las comprobaciones de CP01. Perfil → Mi material muestra solicitudes propias, préstamos activos e historial de devoluciones. Pedir material abre un diálogo con las unidades disponibles agrupadas por nombre y categoría; se pide una unidad por solicitud. Se excluyen piezas prestadas, archivadas, en reparación o fuera de servicio.
+- Dirección y Administración mantienen el alta y edición de piezas desde Gestión → Material y disponen de una cola para aprobar o rechazar solicitudes. Aprobar asigna una unidad disponible del mismo nombre y categoría y registra el préstamo en una transacción. Las peticiones no reservan existencias; al agotarlas se rechazan las demás pendientes de ese grupo. El solicitante puede cancelar las pendientes propias. Las devoluciones reponen disponibilidad.
+- El servidor comprueba membresía activa, permisos, propietario, estado de la petición y disponibilidad. Los músicos no reciben notas internas, peticiones ajenas ni datos de otros prestatarios. Se conservan la auditoría y las restricciones contra préstamos simultáneos de una misma pieza.
+- Migraciones SQLite 008 y PostgreSQL 006; esquema PostgreSQL 6, importación de SQLite 8 y paquete upgrade-from-v5.sql. Caché PWA v26. Sin dependencias nuevas.
+- Verificación: check, 32 pruebas generales y 28 PostgreSQL local. Cubren permisos, privacidad, cancelación, duplicados, aprobación concurrente, asignación de varias unidades del mismo tipo, devolución, reparación, archivo e importación de solicitudes. En navegador se recorrieron alta y edición por Administración, solicitud y cancelación por músico, aprobación por Dirección y consulta del préstamo concedido. Pendiente publicar y aplicar las migraciones en el piloto.
+
+## 2026-11-27 · Edición musical de integrantes
+
+- RF05–RF08, CP01. Las cuentas de Dirección y Administración consultan los integrantes en Gestión → Directorio → Editar ficha. La edición usa los instrumentos del catálogo y las voces o partes dependientes del instrumento; cambiarlo limpia la voz anterior.
+- Se conserva la asignación antigua al abrir y guardar una ficha. Las asignaciones nuevas se validan en el servidor; un músico no puede consultar el directorio de gestión ni editar otros integrantes. Administración mantiene los mismos permisos que Dirección con el rol de gestión unificado existente.
+- Verificado en navegador con Administración: abrir el directorio, editar un músico y guardar Bombardinos / Voz 2, visible después en la lista. Pasaron check, 31 pruebas generales y 27 de PostgreSQL local, con cobertura de edición por ambas cuentas y rechazo de combinaciones inválidas. Caché PWA v25. Pendiente publicar en el piloto.
+
+## 2026-11-27 · Instrumentos y voces en las solicitudes
+
+- RF01–RF08, CP01. Dirección define los instrumentos y las voces o partes de cada instrumento desde Gestión → Catálogo musical. Se admite el mismo nombre de voz en distintos instrumentos. Retirar un instrumento retira sus opciones de voz, sin modificar las fichas ni las partituras existentes.
+- Las solicitudes por correo y Google seleccionan un instrumento del catálogo. Solo se muestra el selector de voz cuando el instrumento tiene voces, y entonces es obligatorio. Cambiar de instrumento limpia la voz. El servidor rechaza instrumentos ajenos y combinaciones inválidas.
+- Compatibilidad provisional: mientras no se haya creado ningún instrumento, el alta conserva los campos de texto anteriores. Las voces antiguas sin asociación se identifican en el catálogo como «Sin instrumento asignado»; Dirección debe recrearlas vinculadas a su instrumento para ofrecerlas en las solicitudes.
+- Migración SQLite 007 y PostgreSQL 005 (esquema 5); la compilación del piloto incluye upgrade-from-v4.sql. Caché PWA v24. No hay nuevas dependencias.
+- Verificación: check, 31 pruebas generales y 27 pruebas PostgreSQL local. En navegador se recorrió Acceso → Gestión → Catálogo, se creó Bombardinos / Voz 2 y se comprobó su selección desde el alta pública. Queda pendiente publicar y aplicar la migración en el piloto.
+
 ## 2026-11-26 · Acceso a pasar lista en el detalle del evento
 
 - Dirección encuentra «Pasar lista» debajo del título, como acción principal junto a «Editar». Antes del inicio, su lugar muestra la hora de apertura. El ajuste es de interfaz y la caché de la PWA pasa a `v23`.

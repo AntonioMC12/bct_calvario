@@ -5,7 +5,7 @@ import { calendar, eventPage } from './events.js';
 import { repertoire, downloads } from './repertoire.js';
 import { attendanceReportPage } from './report.js';
 import { management, managementTools, eventEditor, formationEditor, composeNotice } from './management.js';
-import { materialPage } from './material.js';
+import { materialPage, myMaterialPage } from './material.js';
 import { catalogPage } from './part-options.js';
 import { access, mailRoutes } from './access.js';
 import { bindGoogle, googleButton } from './google.js';
@@ -406,6 +406,7 @@ function profile(content, mode) {
     icon('download') + '</span></span><strong>' + state.saved.size + (state.saved.size === 1 ? ' partitura' : ' partituras') +
     '</strong><span class="muted">Guardadas en este dispositivo</span></a></div></section></div>' +
     '<div class="stack"><section>' + sectionTitle('Ajustes y cuenta') + '<div class="row-list">' +
+    row('Mi material','Solicitudes y préstamos de la banda','#/perfil/material','grid') +
     '<div class="row appearance-setting"><div><label for="theme-choice">Tema</label>' +
     '<p class="muted" id="theme-help">Se guarda en este dispositivo.</p></div>' +
     '<select id="theme-choice" aria-describedby="theme-help">' + options({ system:'Sistema',light:'Claro',dark:'Oscuro' },
@@ -484,6 +485,7 @@ async function render() {
     else if (route === 'calendario') await eventPage(content, context, id, action);
     else if (route === 'repertorio') repertoire(content, context, id, action);
     else if (route === 'avisos') bindNotices(content, id);
+    else if (route === 'perfil' && id === 'material') await myMaterialPage(content,context);
     else if (route === 'perfil' && id === 'notificaciones') await pushSettings(content,context);
     else if (route === 'perfil') profile(content, id);
     else if (route === 'gestion' && id === 'aviso') composeNotice(content, context);

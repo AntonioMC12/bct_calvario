@@ -19,7 +19,7 @@ export async function materialPage(content, ctx, id) {
   }
   if (id === 'nuevo') return editMaterial(content,ctx);
   content.innerHTML = previous + header('Material') + '<p role="status">Cargando…</p>';
-  const { items, loans, members } = await ctx.api('/material');
+  const { items, loans, members, requests } = await ctx.api('/material');
   const history = Map.groupBy(loans,loan => loan.item_id);
   if (id) {
     const item = items.find(item => item.id === id);
@@ -29,9 +29,19 @@ export async function materialPage(content, ctx, id) {
   }
   content.innerHTML = previous + header('Material','Inventario y préstamos',
     '<a class="button primary" href="' + root + '/nuevo">' + icon('plus') + 'Añadir material</a>') +
-    '<div class="catalog-tools field-grid">' + field('query','Buscar por nombre, código o categoría','type="search"') +
+    requestQueue(requests,items,loans) + '<div class="catalog-tools field-grid">' + field('query','Buscar por nombre, código o categoría','type="search"') +
     '<label>Disponibilidad<select name="status">' + options({ current:'En inventario', available:'Disponibles',
       loaned:'Prestados', archived:'Archivados', all:'Todos' }) + '</select></label></div><div class="stack" id="inventory"></div>';
+  for (const form of content.querySelectorAll('[data-review-request]')) {
+    form.addEventListener('submit',event => { form.dataset.choice = event.submitter?.dataset.choice; });
+    bindForm(form,async () => {
+      const action = form.dataset.choice;
+      if (!action) return;
+      await ctx.api('/material-requests/' + form.dataset.reviewRequest + '/' + action,'POST',{});
+      ctx.toast(action === 'approve' ? 'Solicitud aprobada y préstamo registrado' : 'Solicitud rechazada');
+      await materialPage(content,ctx);
+    });
+  }
   const target = content.querySelector('#inventory');
   const query = content.querySelector('[name="query"]');
   const status = content.querySelector('[name="status"]');
@@ -97,5 +107,73 @@ function editMaterial(content, ctx, item, history = [], members = []) {
     await ctx.api(endpoint + '/' + action,'POST',{ ...input,version:item.version });
     ctx.toast(messages[action]);
     ctx.go(root + '/' + item.id);
+  });
+}
+
+function requestQueue(requests, items, loans) {
+  return '<section class="stack">' + sectionTitle('Solicitudes de material',requests.length + (requests.length === 1 ? ' pendiente' : ' pendientes')) +
+    (requests.length ? requests.map(request => {
+      const item = items.find(item => item.id === request.item_id);
+      const available = item && request.member_status === 'active' && items.some(unit => unit.name === item.name &&
+        unit.category === item.category && !unit.archived && unit.condition === 'usable' &&
+        !loans.some(loan => loan.item_id === unit.id && !loan.returned_at));
+      return '<form class="card stack" data-review-request="' + esc(request.id) + '"><h3>' + esc(request.item_name) +
+        '</h3><p>' + esc(request.member_name + ' · ' + request.item_code) + '</p><p class="muted">' +
+        displayTime(request.created_at) + (available ? '' : ' · Material o solicitante no disponible') + '</p>' + errorRegion +
+        '<div class="actions">' + button('Aprobar y prestar','primary','data-choice="approve"' + (available ? '' : ' disabled')) +
+        button('Rechazar','secondary','data-choice="reject"') + '</div></form>';
+    }).join('') : empty('No hay solicitudes pendientes.')) + '</section>';
+}
+
+const requestStatuses = { pending:'Pendiente',approved:'Aprobada',rejected:'Rechazada',cancelled:'Cancelada' };
+
+export async function myMaterialPage(content, ctx) {
+  const previous = back('Perfil','#/perfil');
+  if (ctx.state.offline) {
+    content.innerHTML = previous + header('Mi material') + empty('Necesitas conexión para consultar o solicitar material.');
+    return;
+  }
+  content.innerHTML = previous + header('Mi material') + '<p role="status">Cargando…</p>';
+  const { items, requests, loans } = await ctx.api('/my-material');
+  const current = loans.filter(loan => !loan.returned_at);
+  const returned = loans.filter(loan => loan.returned_at);
+  const loanRows = entries => entries.map(loan => '<article class="card stack"><h3>' + esc(loan.item_name) +
+    '</h3><p class="muted">' + esc(loan.item_code) + ' · Desde el ' + displayTime(loan.lent_at) + '</p>' +
+    (loan.returned_at ? '<p>Devuelto el ' + displayTime(loan.returned_at) + '</p>' : pill('En préstamo','waiting')) + '</article>').join('');
+  content.innerHTML = previous + header('Mi material','Solicita material de la banda y consulta tus préstamos.',
+    button('Pedir material','primary','type="button" id="ask-material"')) +
+    '<p class="muted">Cada solicitud es para una unidad. El préstamo se confirma cuando Dirección o Administración la aprueba.</p>' +
+    '<section class="stack">' + sectionTitle('Mis solicitudes') + (requests.length ? requests.map(request =>
+      '<article class="card stack"><h3>' + esc(request.item_name) + '</h3><p class="muted">' + esc(request.item_code) +
+      ' · ' + displayTime(request.created_at) + '</p>' + pill(requestStatuses[request.status],request.status === 'pending' ? 'waiting' : '') +
+      (request.status === 'pending' ? '<form data-cancel-request="' + esc(request.id) + '">' + errorRegion +
+        button('Cancelar solicitud','secondary') + '</form>' : '') + '</article>').join('') : empty('Todavía no has solicitado material.')) +
+    '</section><section class="stack">' + sectionTitle('Material en préstamo') +
+    (current.length ? loanRows(current) : empty('No tienes material prestado.')) + '</section>' +
+    (returned.length ? '<section class="stack">' + sectionTitle('Material devuelto') + loanRows(returned) + '</section>' : '') +
+    '<dialog id="material-picker" aria-labelledby="material-picker-title"><div class="stack"><div class="actions">' +
+    '<h2 id="material-picker-title">Pedir material</h2>' + button('Cerrar','quiet','type="button" id="close-material-picker"') +
+    '</div><p class="muted">Material disponible. Las solicitudes pendientes no reservan unidades.</p><div id="available-material" class="stack"></div></div></dialog>';
+  const picker = content.querySelector('#material-picker');
+  const available = content.querySelector('#available-material');
+  const groups = Map.groupBy(items,item => JSON.stringify([item.name,item.category]));
+  available.innerHTML = groups.size ? Array.from(groups.values()).map(group => {
+    const candidates = group.filter(item => !requests.some(request => request.item_id === item.id && request.status === 'pending'));
+    return '<form class="card stack" data-request-item="' + esc(candidates[0]?.id ?? '') + '"><h3>' + esc(group[0].name) +
+      '</h3><p class="muted">' + esc(group[0].category) + ' · ' + group.length + (group.length === 1 ? ' disponible' : ' disponibles') +
+      '</p>' + errorRegion + button(candidates.length ? 'Solicitar una unidad' : 'Ya solicitado','secondary',candidates.length ? '' : 'disabled') + '</form>';
+  }).join('') : empty('Ahora no hay material disponible.');
+  content.querySelector('#ask-material').onclick = () => picker.showModal();
+  content.querySelector('#close-material-picker').onclick = () => picker.close();
+  for (const form of available.querySelectorAll('[data-request-item]')) bindForm(form,async () => {
+    await ctx.api('/material-requests','POST',{ itemId:form.dataset.requestItem });
+    picker.close();
+    ctx.toast('Solicitud enviada');
+    await myMaterialPage(content,ctx);
+  });
+  for (const form of content.querySelectorAll('[data-cancel-request]')) bindForm(form,async () => {
+    await ctx.api('/material-requests/' + form.dataset.cancelRequest + '/cancel','POST',{});
+    ctx.toast('Solicitud cancelada');
+    await myMaterialPage(content,ctx);
   });
 }

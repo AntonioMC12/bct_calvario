@@ -4,15 +4,20 @@ import { choice, integer, requireThat, text } from './http.mjs';
 import { transaction } from './store.mjs';
 
 export async function materialDirectory(db) {
-  const [items, loans, members] = await Promise.all([
+  const [items, loans, members, requests] = await Promise.all([
     db.prepare('SELECT * FROM material_items ORDER BY archived, name, code').all(),
     db.prepare(`
       SELECT l.id, l.item_id, l.member_id, m.name AS member_name, l.lent_at, l.returned_at
       FROM material_loans l JOIN members m ON m.id = l.member_id ORDER BY l.lent_at DESC, l.id
     `).all(),
     db.prepare("SELECT id, name, instrument FROM members WHERE status = 'active' ORDER BY name, id").all(),
+    db.prepare(`
+      SELECT r.*, m.name AS member_name, m.status AS member_status, i.name AS item_name, i.code AS item_code
+      FROM material_requests r JOIN members m ON m.id = r.member_id JOIN material_items i ON i.id = r.item_id
+      WHERE r.status = 'pending' ORDER BY r.created_at, r.id
+    `).all(),
   ]);
-  return { items, loans, members };
+  return { items, loans, members, requests };
 }
 
 async function checkVersion(db, id, input) {
@@ -69,5 +74,87 @@ export async function changeMaterial(db, actor, id, action, input) {
     await db.prepare('UPDATE material_items SET version = version + 1 WHERE id = ?').run(id);
     await audit(db,actor.id,'material.' + action,id);
     return { id };
+  });
+}
+
+export async function personalMaterial(db, actor) {
+  const [items, requests, loans] = await Promise.all([
+    db.prepare(`
+      SELECT i.id, i.name, i.code, i.category FROM material_items i
+      WHERE i.archived = 0 AND i.condition = 'usable'
+        AND NOT EXISTS (SELECT 1 FROM material_loans l WHERE l.item_id = i.id AND l.returned_at IS NULL)
+      ORDER BY i.name, i.code
+    `).all(),
+    db.prepare(`
+      SELECT r.id, r.item_id, r.status, r.created_at, r.reviewed_at, i.name AS item_name, i.code AS item_code
+      FROM material_requests r JOIN material_items i ON i.id = r.item_id
+      WHERE r.member_id = ? ORDER BY r.created_at DESC, r.id
+    `).all(actor.id),
+    db.prepare(`
+      SELECT l.id, l.item_id, l.lent_at, l.returned_at, i.name AS item_name, i.code AS item_code
+      FROM material_loans l JOIN material_items i ON i.id = l.item_id
+      WHERE l.member_id = ? ORDER BY l.lent_at DESC, l.id
+    `).all(actor.id),
+  ]);
+  return { items, requests, loans };
+}
+
+async function availableForRequest(db, itemId) {
+  const item = await db.prepare(`
+    SELECT id FROM material_items WHERE id = ? AND archived = 0 AND condition = 'usable'
+      AND NOT EXISTS (SELECT 1 FROM material_loans WHERE item_id = material_items.id AND returned_at IS NULL)
+  `).get(itemId);
+  requireThat(item,409,'Este material ya no está disponible. Actualiza el catálogo.');
+}
+
+export async function requestMaterial(db, actor, input) {
+  const itemId = text(input.itemId,64,'Material',true);
+  return transaction(db,async () => {
+    await availableForRequest(db,itemId);
+    requireThat(!await db.prepare("SELECT id FROM material_requests WHERE item_id = ? AND member_id = ? AND status = 'pending'")
+      .get(itemId,actor.id),409,'Ya tienes una solicitud pendiente para este material.');
+    const id = randomUUID();
+    await db.prepare('INSERT INTO material_requests(id,item_id,member_id,created_at) VALUES (?, ?, ?, ?)')
+      .run(id,itemId,actor.id,new Date().toISOString());
+    await audit(db,actor.id,'material.request',id);
+    return { id };
+  });
+}
+
+export async function resolveMaterialRequest(db, actor, id, action) {
+  return transaction(db,async () => {
+    const request = await db.prepare('SELECT * FROM material_requests WHERE id = ?').get(id);
+    requireThat(request && (action !== 'cancel' || request.member_id === actor.id),404,'No se encuentra la solicitud.');
+    requireThat(request.status === 'pending',409,'La solicitud ya no está pendiente.');
+    const timestamp = new Date().toISOString();
+    if (action === 'approve') {
+      requireThat(await db.prepare("SELECT id FROM members WHERE id = ? AND status = 'active'").get(request.member_id),
+        409,'El solicitante ya no es un miembro activo.');
+      const requested = await db.prepare('SELECT name,category FROM material_items WHERE id = ?').get(request.item_id);
+      const unit = await db.prepare(`
+        SELECT i.id FROM material_items i WHERE i.name = ? AND i.category = ? AND i.archived = 0 AND i.condition = 'usable'
+          AND NOT EXISTS (SELECT 1 FROM material_loans l WHERE l.item_id = i.id AND l.returned_at IS NULL)
+        ORDER BY CASE WHEN i.id = ? THEN 0 ELSE 1 END, i.code LIMIT 1
+      `).get(requested.name,requested.category,request.item_id);
+      requireThat(unit,409,'Este material ya no está disponible. Actualiza el catálogo.');
+      await db.prepare("UPDATE material_requests SET item_id = ?, status = 'approved' WHERE id = ?").run(unit.id,id);
+      await db.prepare('INSERT INTO material_loans(id,item_id,member_id,lent_at) VALUES (?, ?, ?, ?)')
+        .run(randomUUID(),unit.id,request.member_id,timestamp);
+      await db.prepare('UPDATE material_items SET version = version + 1 WHERE id = ?').run(unit.id);
+      await db.prepare(`
+        UPDATE material_requests SET status = 'rejected', reviewed_at = ?, reviewed_by = ?
+        WHERE item_id IN (SELECT id FROM material_items WHERE name = ? AND category = ?) AND status = 'pending' AND id <> ?
+          AND NOT EXISTS (
+            SELECT 1 FROM material_items i WHERE i.name = ? AND i.category = ? AND i.archived = 0 AND i.condition = 'usable'
+              AND NOT EXISTS (SELECT 1 FROM material_loans l WHERE l.item_id = i.id AND l.returned_at IS NULL)
+          )
+      `).run(timestamp,actor.id,requested.name,requested.category,id,requested.name,requested.category);
+    }
+    const status = { approve:'approved',reject:'rejected',cancel:'cancelled' }[action];
+    requireThat(status,422,'Acción no válida.');
+    await db.prepare('UPDATE material_requests SET status = ?, reviewed_at = ?, reviewed_by = ? WHERE id = ?')
+      .run(status,timestamp,actor.id,id);
+    await audit(db,actor.id,'material.request.' + status,id);
+    return { id,status };
   });
 }

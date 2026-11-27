@@ -34,7 +34,7 @@ npx supabase login
 npx supabase db query --remote=vsmmpccqaywetuiyhevm --read-only "SELECT to_regnamespace('calvario') AS schema, to_regclass('calvario.schema_version') AS version_table;"
 ```
 
-Si el esquema está libre, inicialízalo con `dist/piloto/edge/schema.sql`. Si ya existe, consulta `calvario.schema_version`. Para actualizar a la versión 4, haz una copia y usa el archivo `upgrade-from-v1.sql`, `upgrade-from-v2.sql` o `upgrade-from-v3.sql` de `dist/piloto/edge`, según la versión instalada. Si ya está en la versión 4, pasa al despliegue de la función.
+Si el esquema está libre, inicialízalo con `dist/piloto/edge/schema.sql`. Si ya existe, consulta `calvario.schema_version`. Para actualizar a la versión 6, haz una copia y usa el archivo `upgrade-from-v1.sql`, `upgrade-from-v2.sql`, `upgrade-from-v3.sql`, `upgrade-from-v4.sql` o `upgrade-from-v5.sql` de `dist/piloto/edge`, según la versión instalada. Si ya está en la versión 6, pasa al despliegue de la función.
 
 ```powershell
 npx supabase db query --remote=vsmmpccqaywetuiyhevm --file dist/piloto/edge/schema.sql --yes
@@ -62,7 +62,7 @@ npm run account -- provision direccion@ejemplo.invalid director "Dirección"
 
 Los músicos pueden solicitar acceso desde la aplicación. Las altas por correo confirman su dirección antes de que Dirección las apruebe. Desde **Gestión → Directorio → Añadir miembro** se puede crear una ficha sin cuenta para pasar lista. En **Gestión → Solicitudes**, vincula la solicitud verificada a esa ficha al aprobarla para conservar la asistencia y el perfil musical. Desde **Editar ficha** se pueden actualizar los datos de un músico o darlo de baja. La baja conserva sus registros e invalida sus sesiones. En desarrollo también está disponible `npm run account -- deactivate músico@ejemplo.invalid`.
 
-En **Gestión → Material**, Dirección puede registrar cada pieza con su código, categoría y estado, prestarla a un miembro activo y registrar la devolución. El historial se conserva al archivar la pieza. En **Gestión → Catálogo musical** se pueden proponer instrumentos, voces y géneros en los formularios de alta, fichas y repertorio.
+En **Gestión → Material**, Dirección puede registrar cada pieza con su código, categoría y estado, prestarla a un miembro activo y registrar la devolución. El historial se conserva al archivar la pieza. Los músicos acceden a **Perfil → Mi material → Pedir material** para consultar las unidades disponibles y enviar o cancelar solicitudes. Dirección y Administración las aprueban o rechazan desde **Gestión → Material**; la aprobación registra el préstamo y descuenta la unidad disponible. En **Gestión → Catálogo musical** Dirección define los instrumentos de la banda y las voces o partes de cada uno, además de los géneros. Al solicitar acceso, se elige un instrumento y, si tiene voces configuradas, una de sus voces.
 
 ## Partituras
 

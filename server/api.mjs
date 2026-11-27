@@ -5,8 +5,8 @@ import { attendanceReport, calendarFile, cancelEvent, eventById, eventDetail, ev
 import { canManage, managementRoles } from '../src/roles.js';
 import { catalog, saveWork, servePdf, approveScore, discardScore, exportScores, uploadPdf } from './music.mjs';
 import { deactivateMember, reviewMember, saveMember } from './members.mjs';
-import { changeMaterial, materialDirectory, saveMaterial } from './material.mjs';
-import { catalogValues, removeCatalogValue, saveCatalogValue } from './catalog-values.mjs';
+import { changeMaterial, materialDirectory, saveMaterial, personalMaterial, requestMaterial, resolveMaterialRequest } from './material.mjs';
+import { validateMusicalSelection, catalogValues, removeCatalogValue, saveCatalogValue } from './catalog-values.mjs';
 import { formation, saveFormation, saveTemplate } from './formations.mjs';
 import { transaction } from './store.mjs';
 import { createAccountMail } from './account-mail.mjs';
@@ -138,6 +138,7 @@ export function createApi(db, { sendMail, accountClock, google, push, publicSite
         const name = text(input.name, 120, 'Nombre y apellidos', true);
         const instrument = text(input.instrument, 80, 'Instrumento', true);
         const voice = text(input.voice, 80, 'Voz');
+        await validateMusicalSelection(db,instrument,voice);
         const hash = await hashPassword(secret);
         id = randomUUID();
         const inserted = await db.prepare(`
@@ -224,6 +225,18 @@ export function createApi(db, { sendMail, accountClock, google, push, publicSite
       }
     }
 
+    if (method === 'GET' && pathname === '/api/my-material') {
+      return json(response,200,await personalMaterial(db,member));
+    }
+    if (method === 'POST' && pathname === '/api/material-requests') {
+      return json(response,201,await requestMaterial(db,member,await inputFor()));
+    }
+    const materialRequestRoute = pathname.match(/^\/api\/material-requests\/([\w-]+)\/(approve|reject|cancel)$/);
+    if (method === 'POST' && materialRequestRoute) {
+      const [,id,action] = materialRequestRoute;
+      await inputFor(action === 'cancel' ? null : managementRoles);
+      return json(response,200,await resolveMaterialRequest(db,member,id,action));
+    }
     if (pathname === '/api/material') {
       if (method === 'GET') {
         requireThat(canManage(member.role), 403, 'Tu perfil no puede consultar el material.');

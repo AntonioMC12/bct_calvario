@@ -37,11 +37,13 @@ const csp = "default-src 'self'; script-src 'self' https://www.gstatic.com https
   "style-src 'self'; img-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; " +
   "frame-src https://www.google.com/maps https://*.firebaseapp.com https://apis.google.com https://accounts.google.com; " +
   "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseapp.com " + edge.origin;
-const [initialSql, rosterSql, managementSql, rollCallSql] = await Promise.all([
+const [initialSql, rosterSql, managementSql, rollCallSql, instrumentSql, materialRequestsSql] = await Promise.all([
   readFile('server/postgres/001-initial.sql','utf8'),
   readFile('server/postgres/002-roster-members.sql','utf8'),
   readFile('server/postgres/003-management-material-scores.sql','utf8'),
   readFile('server/postgres/004-event-roll-call.sql','utf8'),
+  readFile('server/postgres/005-instrument-voices.sql','utf8'),
+  readFile('server/postgres/006-material-requests.sql','utf8'),
 ]);
 const migration = sql => 'BEGIN;\nSELECT pg_advisory_xact_lock(741697124518);\n' + sql + '\nCOMMIT;\n';
 
@@ -54,10 +56,12 @@ await Promise.all([
   cp(join('deployment','edge','config.toml'),join(projectDir,'supabase','config.toml')),
   ...['parts.js','roles.js','time.js'].map(file => cp(join('src',file),join(shared,'src',file))),
   writeFile(join(functionDir,'site.mjs'),'export const defaultSite = ' + JSON.stringify(pages.href) + ';\n'),
-  writeFile(join(projectDir,'schema.sql'),migration([initialSql,rosterSql,managementSql,rollCallSql].join('\n'))),
-  writeFile(join(projectDir,'upgrade-from-v1.sql'),migration([rosterSql,managementSql,rollCallSql].join('\n'))),
-  writeFile(join(projectDir,'upgrade-from-v2.sql'),migration([managementSql,rollCallSql].join('\n'))),
-  writeFile(join(projectDir,'upgrade-from-v3.sql'),migration(rollCallSql)),
+  writeFile(join(projectDir,'schema.sql'),migration([initialSql,rosterSql,managementSql,rollCallSql,instrumentSql,materialRequestsSql].join('\n'))),
+  writeFile(join(projectDir,'upgrade-from-v1.sql'),migration([rosterSql,managementSql,rollCallSql,instrumentSql,materialRequestsSql].join('\n'))),
+  writeFile(join(projectDir,'upgrade-from-v2.sql'),migration([managementSql,rollCallSql,instrumentSql,materialRequestsSql].join('\n'))),
+  writeFile(join(projectDir,'upgrade-from-v3.sql'),migration([rollCallSql,instrumentSql,materialRequestsSql].join('\n'))),
+  writeFile(join(projectDir,'upgrade-from-v4.sql'),migration([instrumentSql,materialRequestsSql].join('\n'))),
+  writeFile(join(projectDir,'upgrade-from-v5.sql'),migration(materialRequestsSql)),
   writeFile(join(siteDir,'src','runtime.js'), 'export const apiBase = ' + JSON.stringify(edge.href + '/api') + ';\n'),
   writeFile(join(siteDir,'index.html'),html.replace('<head>','<head>\n    <meta http-equiv="Content-Security-Policy" content="' + csp + '">')),
   writeFile(join(siteDir,'.nojekyll'),''),

@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 const migrations = ['./schema.sql', './migrations/002-account-mail.sql', './migrations/003-integrations.sql',
-  './migrations/004-roster-members.sql', './migrations/005-management-material-scores.sql', './migrations/006-event-roll-call.sql'];
+  './migrations/004-roster-members.sql', './migrations/005-management-material-scores.sql', './migrations/006-event-roll-call.sql', './migrations/007-instrument-voices.sql', './migrations/008-material-requests.sql'];
 
 export function openDatabase(filename = process.env.CALVARIO_DB || 'data/calvario.sqlite') {
   if (filename !== ':memory:') mkdirSync(dirname(resolve(filename)), { recursive: true });
