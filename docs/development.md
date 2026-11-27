@@ -2,6 +2,11 @@
 
 El [estado y los pendientes de Calvario](estado-y-pendientes.md) recoge la cobertura actual y los requisitos añadidos el 26 de noviembre de 2026. Las entradas siguientes conservan el historial de cada entrega.
 
+## 2026-11-27 · Barra uniforme de acciones de partitura
+
+- Ver, Descargar y Guardar forman una barra de columnas iguales bajo los datos de cada parte, con icono sobre el texto y separadores interiores. Ver conserva el énfasis de color. Guardar mantiene el nombre accesible y la ayuda «Guardar sin conexión». El foco de teclado se dibuja dentro de la barra.
+- Se comprobó en la demo a 390 y 320 px; a 320 las tres acciones tienen la misma altura y anchura (77 px), sin saltar de fila. Pasaron check y las 32 pruebas generales. Caché PWA v29. Se publica en Pages sin esperar a terminar el despliegue.
+
 ## 2026-11-27 · Visor de partituras dentro de Repertorio
 
 - RF29–RF32 y RF37–RF40. Las acciones se compactan como Ver, Descargar y Sin conexión. Ver abre un diálogo de lectura en la misma página, con navegación entre páginas, zoom y ajuste de anchura; en móvil llena la pantalla. También se usa desde la obra, la validación y Descargas.
