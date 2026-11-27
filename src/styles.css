@@ -317,6 +317,16 @@ a.row:hover { background: var(--paper); }
 .notice-detail .pill { justify-self: start; }
 .notice-receipts { margin-top: 1rem; }
 .catalog-tools { display: grid; gap: .8rem; max-width: 520px; }
+.material-view { gap: 1.5rem; }
+.material-view > .page-head, .material-view .section-head { margin-bottom: 0; }
+.material-view .section-head { flex-wrap: wrap; }
+.material-view .material-filters { max-width: none; align-items: end; grid-template-columns: minmax(0,2fr) minmax(0,1fr); }
+@media (max-width: 540px) {
+  .material-view > .page-head { align-items: flex-start; }
+  .material-view > .page-head .button { width: 100%; }
+  .material-view .material-filters { grid-template-columns: minmax(0,1fr); gap: 1rem; }
+}
+
 .catalog-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .55rem 1rem; margin-bottom: 1rem; }
 .catalog-management { display: grid; flex: 1 1 20rem; max-width: 25rem;
   grid-template-columns: repeat(auto-fit,minmax(min(100%,9.5rem),1fr)); gap: .55rem; }
